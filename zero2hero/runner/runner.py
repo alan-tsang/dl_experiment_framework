@@ -128,16 +128,6 @@ class Runner(RunnerBase):
         return model_output, metric_value
 
 
-    def compute_metric(self, model_output, batch, mode: str) -> argparse.Namespace:
-        """
-        Note: this is a placeholder, you should implement it
-            or make model_output contain the metric value you want to monitor
-        """
-        first_call_warning("metric",
-                           "compute_metric方法未实现，metric计算直接返回模型输出")
-        return model_output
-
-
     def backward(self, scaler, loss):
         if registry.get("cfg.training.ds_config"):
             self.model.backward(loss)
@@ -223,6 +213,50 @@ class Runner(RunnerBase):
         if dist.is_initialized():
             dist.destroy_process_group()
 
+
+    def compute_metric(self, model_output, batch, mode: str) -> argparse.Namespace:
+        """
+        Note: this is a placeholder, you should implement it
+            or make model_output contain the metric value you want to monitor
+        """
+        first_call_warning("metric",
+                           "compute_metric方法未实现，metric计算直接返回模型输出")
+        return model_output
+
+
+    def filter_metric(self, metrics, mode: str):
+        should_monitor = list(registry.get(f"cfg.training.{mode}_monitor").keys())
+        monitored = list(vars(metrics).keys())
+        if not all([m in monitored for m in should_monitor]):
+            first_call_warning(
+                f"filter_metric_{mode}",
+                f"{mode} 时期，compute_metric 返回的Namespace中缺少监控的keys;"
+                f"应该包含：{should_monitor}，实际包含：{monitored}"
+            )
+        filtered_metrics = argparse.Namespace()
+        for key, value in vars(metrics).items():
+            if key in should_monitor:
+                setattr(filtered_metrics, key, value)
+        return filtered_metrics
+
+    @staticmethod
+    def avrage_metric(metrics: List[argparse.Namespace]) -> argparse.Namespace:
+        if not metrics:
+            return argparse.Namespace()
+        average_metric = argparse.Namespace()
+        for key in vars(metrics[0]).keys():
+            values = [getattr(metric, key) for metric in metrics]
+            average = sum(values) / len(values)
+            setattr(average_metric, key, average)
+        return average_metric
+
+
+    @staticmethod
+    def register_metrics_values(metrics: argparse.Namespace):
+        for key, value in vars(metrics).items():
+            registry.register(f"metric.{key}", value)
+
+
     @main_process
     def wandb_log(self, log_dict):
         if registry.get("wandb_enable") and wandb.run is not None:
@@ -254,7 +288,7 @@ class Runner(RunnerBase):
             # log_level = registry.get("cfg.log.log_level"),
             # to_file = registry.get("cfg.log.to_file"),
             # folder = registry.get("cfg.log.folder"),
-            # run_name = registry.get("cfg.run_name")
+            run_name = registry.get("cfg.run_name")
         )
 
     def _apply_launch_strategy(self):
@@ -349,37 +383,7 @@ class Runner(RunnerBase):
             if self.test_data_loader is not None:
                 self.test_data_loader = wrap_dataloader(self.test_data_loader)
 
-    def filter_metric(self, metrics, mode: str):
-        should_monitor = list(registry.get(f"cfg.training.{mode}_monitor").keys())
-        monitored = list(vars(metrics).keys())
-        if not all([m in monitored for m in should_monitor]):
-            first_call_warning(
-                f"filter_metric_{mode}",
-                f"{mode} 时期，compute_metric 返回的Namespace中缺少监控的keys;"
-                f"应该包含：{should_monitor}，实际包含：{monitored}"
-            )
-        filtered_metrics = argparse.Namespace()
-        for key, value in vars(metrics).items():
-            if key in should_monitor:
-                setattr(filtered_metrics, key, value)
-        return filtered_metrics
 
-    @staticmethod
-    def avrage_metric(metrics: List[argparse.Namespace]) -> argparse.Namespace:
-        if not metrics:
-            return argparse.Namespace()
-        average_metric = argparse.Namespace()
-        for key in vars(metrics[0]).keys():
-            values = [getattr(metric, key) for metric in metrics]
-            average = sum(values) / len(values)
-            setattr(average_metric, key, average)
-        return average_metric
-
-
-    @staticmethod
-    def register_metrics_values(metrics: argparse.Namespace):
-        for key, value in vars(metrics).items():
-            registry.register(f"metric.{key}", value)
 
 
     def _setup_builtin_callbacks(self):
