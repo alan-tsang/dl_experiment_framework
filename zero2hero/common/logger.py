@@ -90,7 +90,7 @@ class Logger(ManagerMixin):
         return
 
     # Note: for 分布式打印，但是已过期，通过dist.dist的重定向built_in_print实现
-    def just_print(self, text: str, end = "\n", to_file = None):
+    def just_print(self, obj: any, end = "\n", to_file = None):
         if torch.distributed.is_initialized():
             if torch.distributed.get_rank() != 0:
                 return
@@ -98,23 +98,23 @@ class Logger(ManagerMixin):
         if to_file is None:
             to_file = self.to_file
 
-        print(text, end = end, flush = True)
+        print(obj, end = end, flush = True)
 
         if to_file and self._file_handler:
-            self._file_handler.write(f"{text}{end}")
+            self._file_handler.write(f"{obj}{end}")
 
 
-    def debug(self, text: str, end = "\n", timestamp = True):
-        return self.log_print(text, level = "DEBUG", end = end, timestamp = timestamp)
+    def debug(self, obj: any, end = "\n", timestamp = True):
+        return self.log_print(obj, level = "DEBUG", end = end, timestamp = timestamp)
 
-    def info(self, text: str, end = "\n", timestamp = True):
-        return self.log_print(text, level = "INFO", end = end, timestamp = timestamp)
+    def info(self, obj: any, end = "\n", timestamp = True):
+        return self.log_print(obj, level = "INFO", end = end, timestamp = timestamp)
 
-    def warning(self, text: str, end = "\n", timestamp = True):
-        return self.log_print(text, level = "WARNING", end = end, timestamp = timestamp)
+    def warning(self, obj: any, end = "\n", timestamp = True):
+        return self.log_print(obj, level = "WARNING", end = end, timestamp = timestamp)
 
-    def error(self, text: str, end = "\n", timestamp = True):
-        return self.log_print(text, level = "ERROR", end = end, timestamp = timestamp)
+    def error(self, obj: any, end = "\n", timestamp = True):
+        return self.log_print(obj, level = "ERROR", end = end, timestamp = timestamp)
 
-    def critical(self, text: str, end = "\n", timestamp = True):
-        return self.log_print(text, level = "CRITICAL", end = end, timestamp = timestamp)
+    def critical(self, obj: any, end = "\n", timestamp = True):
+        return self.log_print(obj, level = "CRITICAL", end = end, timestamp = timestamp)

@@ -10,6 +10,8 @@
 """
 import argparse
 import contextlib
+import warnings
+from typing import List
 
 import deepspeed
 import torch
@@ -23,6 +25,7 @@ from ..callback import (CheckpointCallback, EpochSummaryCallBack, ProcessCallBac
 from ..common.dl_util import get_batch_n, get_model_info
 from ..common.logger import Logger
 from ..common.registry import registry
+from ..common.util import first_call_warning
 from ..config.runner_config import RunnerConfig
 from ..dist.init import is_main_process, main_process
 
@@ -38,6 +41,7 @@ class Runner(RunnerBase):
             optimizer = None,
             callbacks = None,
             runner_config: RunnerConfig = None,
+            metric_func = None,
             *args,
             **kwargs,
     ):
@@ -53,11 +57,13 @@ class Runner(RunnerBase):
         self.callbacks = callbacks if callbacks is not None else []
         self.scheduler = None
         self.runner_config = runner_config or RunnerConfig()
+        self.compute_metric = metric_func if metric_func else self.compute_metric
 
         self._assign_runner_cfg(self.runner_config)
         self._assign_logger()
         self._apply_launch_strategy()
         self._setup_builtin_callbacks()
+
 
     def fit(self, *args, **kwargs):
         try:
@@ -72,6 +78,7 @@ class Runner(RunnerBase):
                 self.train()
                 self.valid()
                 self.test()
+                self.after_running_epoch()
         except BaseException as e:
             self.logger.critical(f"训练时，发生异常：{e.__class__.__name__}")
             print(e)
@@ -89,15 +96,17 @@ class Runner(RunnerBase):
         for batch_i, data in enumerate(self.train_data_loader):
             registry.register("current_batch", batch_i)
             self.before_running_batch()
-            data = self._move_data_to_device(data)
             self.train_data_loader.sampler.set_epoch(current_epoch)
+            data = self._move_train_data_to_device(data)
             with self.maybe_autocast(is_fp16):
                 output, _ = self.train_step(data)
-            assert "loss" in output, ("backward必须返回包含loss的Namespace, "
-                                      "要么模型中提供，要么覆盖train_step方法提供")
+            assert "loss" in output, ("train_step必须返回包含loss的Namespace, "
+                                      "其默认行为是直接返回模型输出"
+                                      "因此要么模型forward返回含loss的Namespace(推荐)"
+                                      "要么改写train_step方法返回含loss的Namespace")
             self.backward(scaler, output.loss)
             self.after_running_batch()
-        self.after_running_epoch()
+
 
     def train_step(self, batch) -> tuple[any, argparse.Namespace]:
         """
@@ -111,18 +120,22 @@ class Runner(RunnerBase):
         self.model.train()
         model_output = self.model(**batch)
 
-        metric_value = self.compute_metric(model_output, batch)
+        metric_value = self.compute_metric(model_output, batch, "train")
+        metric_value = self.filter_metric(metric_value, "train")
 
-        self._update_metrics_values(metric_value)
+        self.register_metrics_values(metric_value)
 
         return model_output, metric_value
 
 
-    def compute_metric(self, inputs, batch) -> argparse.Namespace:
+    def compute_metric(self, model_output, batch, mode: str) -> argparse.Namespace:
         """
-        depends on project, this function should be implemented by user
+        Note: this is a placeholder, you should implement it
+            or make model_output contain the metric value you want to monitor
         """
-        return inputs
+        first_call_warning("metric",
+                           "compute_metric方法未实现，metric计算直接返回模型输出")
+        return model_output
 
 
     def backward(self, scaler, loss):
@@ -146,32 +159,54 @@ class Runner(RunnerBase):
 
     @torch.no_grad()
     def valid(self):
-        self.model.eval()
-
-        current_epoch = registry.get("current_epoch")
-        if not self.valid_data_loader:
-            if (current_epoch + 1) % registry.get("valid_every_n_epochs"):
+        if self.valid_data_loader:
+            self.model.eval()
+            current_epoch = registry.get("current_epoch")
+            metrics = []
+            if (current_epoch + 1) % registry.get("cfg.training.valid_every_n_epochs") == 0:
                 for batch_i, data in enumerate(self.valid_data_loader):
-                    data = self._move_data_to_device(data)
-                    self.valid_step(data)
+                    data = self._move_valid_data_to_device(data)
+                    metric_filter = self.valid_step(data)
+                    metrics.append(metric_filter)
+            self.logger.info(f"VALID: {self.avrage_metric(metrics)}")
+            self.model.train()
+        else:
+            first_call_warning("valid", "未提供valid_data_loader，跳过valid")
 
-        self.model.train()
 
     def valid_step(self, batch):
-        pass
+        model_output = self.model(**batch)
+        metric_value = self.compute_metric(model_output, batch, "valid")
+        metric_filter = self.filter_metric(metric_value, "valid")
+        self.register_metrics_values(metric_filter)
+        return metric_filter
+
 
     @torch.no_grad()
     def test(self, *args, **kwargs):
+        if not self.test_data_loader:
+            first_call_warning("test", "未提供test_data_loader，跳过test")
+            return
+
         self.model.eval()
+        current_epoch = registry.get("current_epoch")
+        metrics = []
+        if (current_epoch + 1) % registry.get("cfg.training.test_every_n_epochs") == 0:
+            for batch_i, data in enumerate(self.test_data_loader):
+                data = self._move_test_data_to_device(data)
+                metric_filter = self.test_step(data)
+                metrics.append(metric_filter)
+            self.logger.info(f"TEST: {self.avrage_metric(metrics)}")
+            self.model.train()
 
-        for batch_i, data in enumerate(self.test_data_loader):
-            data = self._move_data_to_device(data)
-            self.test_step(data)
-
-        self.model.train()
 
     def test_step(self, batch):
-        pass
+        model_output = self.model(**batch)
+        metric_value = self.compute_metric(model_output, batch, "test")
+        metric_filter = self.filter_metric(metric_value, "test")
+        self.register_metrics_values(metric_filter)
+        return metric_filter
+
 
     def before_all(self):
         super().before_all()
@@ -215,10 +250,11 @@ class Runner(RunnerBase):
         # 没有的话就会用这些参数创建
         self.logger = Logger.get_instance(
             "logger",
-            log_level = registry.get("cfg.log.log_level"),
-            to_file = registry.get("cfg.log.to_file"),
-            folder = registry.get("cfg.log.folder"),
-            run_name = registry.get("cfg.run_name")
+            **dict(registry.get("cfg.log")),
+            # log_level = registry.get("cfg.log.log_level"),
+            # to_file = registry.get("cfg.log.to_file"),
+            # folder = registry.get("cfg.log.folder"),
+            # run_name = registry.get("cfg.run_name")
         )
 
     def _apply_launch_strategy(self):
@@ -313,18 +349,36 @@ class Runner(RunnerBase):
             if self.test_data_loader is not None:
                 self.test_data_loader = wrap_dataloader(self.test_data_loader)
 
-    def _update_metrics_values(self, metrics: argparse.Namespace):
-        should_monitor = list(registry.get("cfg.training.train_monitor").keys())
+    def filter_metric(self, metrics, mode: str):
+        should_monitor = list(registry.get(f"cfg.training.{mode}_monitor").keys())
         monitored = list(vars(metrics).keys())
         if not all([m in monitored for m in should_monitor]):
-            self.logger.warning(
-                f"模型输出的Namespace中缺少监控的keys；\n"
+            first_call_warning(
+                f"filter_metric_{mode}",
+                f"{mode} 时期，compute_metric 返回的Namespace中缺少监控的keys;"
                 f"应该包含：{should_monitor}，实际包含：{monitored}"
             )
-
+        filtered_metrics = argparse.Namespace()
         for key, value in vars(metrics).items():
-            if key not in registry.get("cfg.training.train_monitor"):
-                continue
+            if key in should_monitor:
+                setattr(filtered_metrics, key, value)
+        return filtered_metrics
+
+    @staticmethod
+    def avrage_metric(metrics: List[argparse.Namespace]) -> argparse.Namespace:
+        if not metrics:
+            return argparse.Namespace()
+        average_metric = argparse.Namespace()
+        for key in vars(metrics[0]).keys():
+            values = [getattr(metric, key) for metric in metrics]
+            average = sum(values) / len(values)
+            setattr(average_metric, key, average)
+        return average_metric
+
+
+    @staticmethod
+    def register_metrics_values(metrics: argparse.Namespace):
+        for key, value in vars(metrics).items():
             registry.register(f"metric.{key}", value)
 
 
@@ -342,14 +396,14 @@ class Runner(RunnerBase):
 
         callbacks = [
             progress_callback,
-            epoch_summary_callback,
             checkpoint_callback,
             wandb_callback,
+            epoch_summary_callback,
         ]
         callbacks.extend(self.callbacks)
         self._register_callbacks(callbacks)
 
-    def _move_data_to_device(self, data):
+    def _move_train_data_to_device(self, data):
         device = registry.get("device")
         if isinstance(data, (list, tuple)):
             return [d.to(device) for d in data]
@@ -360,3 +414,10 @@ class Runner(RunnerBase):
         else:
             self.logger.warning(f"未知数据类型：{type(data)}")
             return data
+
+    def _move_valid_data_to_device(self, data):
+        return self._move_train_data_to_device(data)
+
+    def _move_test_data_to_device(self, data):
+        return self._move_train_data_to_device(data)
+

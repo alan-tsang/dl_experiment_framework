@@ -1,3 +1,4 @@
+import argparse
 from argparse import Namespace
 
 import torch
@@ -34,7 +35,6 @@ class CustomDataset(Dataset):
         y = regular(y)
 
         return x, y
-
 
 
 def collate_fn(batch):
@@ -91,6 +91,18 @@ class Net(nn.Module):
             loss = loss
         )
 
+def compute_metric(model_output, batch, mode):
+    if mode == 'train':
+        return model_output
+    elif mode == 'valid':
+        return model_output
+    elif mode == 'test':
+        x, y_shift = batch['x'], batch['y_shift']
+        pred = model_output.logit.argmax(dim = -1)
+        return argparse.Namespace(
+            acc = (pred == y_shift).float().mean()
+        )
+
 
 if __name__ == '__main__':
     cfg = load_cfg(path = 'example/default_cfg.yaml')
@@ -121,6 +133,7 @@ if __name__ == '__main__':
         model = net,
         epochs = cfg.training.epochs,
         optimizer = optimizer,
-        runner_config = cfg
+        runner_config = cfg,
+        metric_func = compute_metric
     )
     runner.fit()
