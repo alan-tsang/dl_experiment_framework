@@ -1,0 +1,31 @@
+log:
+  log_level: INFO
+  to_file: true
+  folder: ./logs
+  run_name: experiment_01
+
+training:
+  train_monitor:
+    loss: reverse
+  valid_monitor:
+    loss: reverse
+  test_monitor:
+    loss: reverse
+  valid_every_n_epochs: 1
+  test_every_n_epochs: 1
+  progress_every_n_epochs: 1
+  progress_every_n_batches: 10
+
+wandb:
+  wandb_enable: false
+  wandb_project_name: default
+  wandb_interval: 1
+  wandb_offline: true
+
+pt:
+  pt_save: true
+  pt_save_dir: ./checkpoints
+  pt_save_n_epochs: 1
+  pt_best_monitor: loss
+  pt_topk: 1
+  pt_monitor_reverse: false
