@@ -27,7 +27,6 @@ def load_cfg(path, is_runtime = None, ds_cfg = None, from_cli = True):
         broadcast_object_list([runtime_cfg], src = 0)
         barrier()
 
-
     cfg = OmegaConf.merge(base_cfg, runtime_cfg, ds_cfg, cli_cfg)
     """
     if is_runtime, wandb will not init in the runner again, and as well, 

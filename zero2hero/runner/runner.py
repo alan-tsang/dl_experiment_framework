@@ -150,16 +150,27 @@ class Runner(RunnerBase):
     @torch.no_grad()
     def valid(self):
         if self.valid_data_loader:
-            self.model.eval()
-            current_epoch = registry.get("current_epoch")
-            metrics = []
-            if (current_epoch + 1) % registry.get("cfg.training.valid_every_n_epochs") == 0:
+            def fn(is_valid_clone = False):
+                self.model.eval()
+                metrics = []
                 for batch_i, data in enumerate(self.valid_data_loader):
                     data = self._move_valid_data_to_device(data)
                     metric_filter = self.valid_step(data)
                     metrics.append(metric_filter)
-            self.logger.info(f"VALID: {self.average_batch_metric(metrics)}")
-            self.model.train()
+                    if is_valid_clone:
+                        self.logger.info(f"VALID: {metric_filter}")
+                        self.wandb_log(vars(metric_filter))
+
+                self.logger.info(f"VALID Summary: {self.average_batch_metric(metrics)}")
+                self.wandb_log(vars(self.average_batch_metric(metrics)))
+                self.model.train()
+
+            current_epoch = registry.get("current_epoch")
+            if current_epoch is not None:
+                if (current_epoch + 1) % registry.get("cfg.training.valid_every_n_epochs") == 0:
+                    fn(is_valid_clone = False)
+            else:
+                fn(is_valid_clone = True)
         else:
             first_call_warning("valid", "未提供valid_data_loader，跳过valid")
 
@@ -178,22 +189,32 @@ class Runner(RunnerBase):
             first_call_warning("test", "未提供test_data_loader，跳过test")
             return
 
-        self.model.eval()
-        current_epoch = registry.get("current_epoch")
-        metrics = []
-        if (current_epoch + 1) % registry.get("cfg.training.test_every_n_epochs") == 0:
+        def fn(is_test_clone = False):
+            self.model.eval()
+            metrics = []
             for batch_i, data in enumerate(self.test_data_loader):
                 data = self._move_test_data_to_device(data)
                 metric_filter = self.test_step(data)
                 metrics.append(metric_filter)
-            self.logger.info(f"TEST: {self.average_batch_metric(metrics)}")
+                if is_test_clone:
+                    self.logger.info(f"TEST: {metric_filter}")
+                    self.wandb_log(vars(metric_filter))
+            self.logger.info(f"TEST Summary: {self.average_batch_metric(metrics)}")
+            self.wandb_log(vars(self.average_batch_metric(metrics)))
             self.model.train()
 
+        current_epoch = registry.get("current_epoch")
+        if current_epoch is not None:
+            if (current_epoch + 1) % registry.get("cfg.training.test_every_n_epochs") == 0:
+                fn(is_test_clone = False)
+        else:
+            fn(is_test_clone = True)
 
     def test_step(self, batch):
         model_output = self.model(**batch)
         metric_value = self.compute_metric(model_output, batch, "test")
         metric_filter = self.filter_metric(metric_value, "test")
+        # train、test共有的metric值会覆盖
         self.register_metrics_values(metric_filter)
         return metric_filter
 
@@ -263,7 +284,7 @@ class Runner(RunnerBase):
 
     @main_process
     def wandb_log(self, log_dict):
-        if registry.get("wandb_enable") and wandb.run is not None:
+        if registry.get("cfg.wandb.wandb_enable") and wandb.run is not None:
             wandb.log(log_dict)
             self.logger.info(f"wandb记录：{log_dict}")
 
@@ -386,8 +407,6 @@ class Runner(RunnerBase):
                 self.valid_data_loader = wrap_dataloader(self.valid_data_loader)
             if self.test_data_loader is not None:
                 self.test_data_loader = wrap_dataloader(self.test_data_loader)
-
-
 
 
     def _setup_builtin_callbacks(self):

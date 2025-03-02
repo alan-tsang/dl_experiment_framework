@@ -4,7 +4,7 @@ from argparse import Namespace
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from zero2hero.model import transformer
+from zero2hero.model import BaseModel, transformer
 from zero2hero.common.registry import registry
 from zero2hero.config.load_config import load_cfg
 from zero2hero.runner.runner import Runner
@@ -70,13 +70,12 @@ def collate_fn(batch):
 
 
 from torch import nn
-class Net(nn.Module):
+class DemoNet(BaseModel):
     def __init__(self, transformer, logit_generator):
         super().__init__()
         self.transformer = transformer
         self.logit_generator = logit_generator
         self.criterion = nn.CrossEntropyLoss()
-
 
     def forward(self, x, y_input, y_shift, x_mask, y_mask, *args, **kwargs):
         """
@@ -91,7 +90,8 @@ class Net(nn.Module):
             loss = loss
         )
 
-def compute_metric(model_output, batch, mode) -> argparse.Namespace:
+def compute_metric(model_output: argparse.Namespace, batch, mode) \
+        -> argparse.Namespace:
     """
     广播metric，该函数返回的Namespace的values 需要支持sum操作（不同设备报错，迁移到cpu or item()）
     """
@@ -131,7 +131,8 @@ if __name__ == '__main__':
     model_cfg = cfg.model
     model = registry.get_model_class(cfg.model.type)(**model_cfg)
     logit_generator = nn.Linear(model_cfg.d, model_cfg.vocab_n)
-    net = Net(model, logit_generator)
+    net = DemoNet(model, logit_generator)
+    net.load_checkpoint('example/transformer_to_copy_str.pth')
 
     optimizer = torch.optim.AdamW(net.parameters(), lr = cfg.optimizer.lr)
 
@@ -145,4 +146,5 @@ if __name__ == '__main__':
         runner_config = cfg,
         metric_func = compute_metric
     )
-    runner.fit()
+    # runner.fit()
+    runner.valid()
