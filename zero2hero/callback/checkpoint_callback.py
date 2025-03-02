@@ -110,12 +110,13 @@ class CheckpointCallback(BaseCallBack):
         torch.save(self._get_state_dict(), path)
 
     # 各生命周期回调方法
+    
     def before_train(self):
         """训练开始前保存初始模型"""
         self.save_model("initial.pth")
         self.logger.info(f"初始模型保存成功: initial.pth")
 
-
+    
     def after_train(self):
         """训练结束后保存最终模型"""
         self.save_model("last.pth")
@@ -140,7 +141,7 @@ class CheckpointCallback(BaseCallBack):
 
     def _handle_topk_saving(self, epoch: int, batch: Optional[int]):
         """处理TopK模型保存逻辑"""
-        if not (self.topk > 0 and self.monitor):
+        if not (self.topk > 0 and self.monitor and self.save_enabled):
             return
 
         if (value := registry.get(f"metric.{self.monitor}")) is None:
