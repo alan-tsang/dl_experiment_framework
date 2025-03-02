@@ -158,7 +158,7 @@ class Runner(RunnerBase):
                     data = self._move_valid_data_to_device(data)
                     metric_filter = self.valid_step(data)
                     metrics.append(metric_filter)
-            self.logger.info(f"VALID: {self.avrage_metric(metrics)}")
+            self.logger.info(f"VALID: {self.average_batch_metric(metrics)}")
             self.model.train()
         else:
             first_call_warning("valid", "未提供valid_data_loader，跳过valid")
@@ -186,7 +186,7 @@ class Runner(RunnerBase):
                 data = self._move_test_data_to_device(data)
                 metric_filter = self.test_step(data)
                 metrics.append(metric_filter)
-            self.logger.info(f"TEST: {self.avrage_metric(metrics)}")
+            self.logger.info(f"TEST: {self.average_batch_metric(metrics)}")
             self.model.train()
 
 
@@ -223,8 +223,8 @@ class Runner(RunnerBase):
                            "compute_metric方法未实现，metric计算直接返回模型输出")
         return model_output
 
-
-    def filter_metric(self, metrics, mode: str):
+    @staticmethod
+    def filter_metric(metrics: argparse.Namespace, mode: str):
         should_monitor = list(registry.get(f"cfg.training.{mode}_monitor").keys())
         monitored = list(vars(metrics).keys())
         if not all([m in monitored for m in should_monitor]):
@@ -239,8 +239,12 @@ class Runner(RunnerBase):
                 setattr(filtered_metrics, key, value)
         return filtered_metrics
 
+    # 要求metric里的值支持sum
     @staticmethod
-    def avrage_metric(metrics: List[argparse.Namespace]) -> argparse.Namespace:
+    def average_batch_metric(metrics: List[argparse.Namespace]) -> argparse.Namespace:
+        """
+        average metrics in different data loader' s batches
+        """
         if not metrics:
             return argparse.Namespace()
         average_metric = argparse.Namespace()

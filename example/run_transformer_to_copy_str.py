@@ -91,11 +91,11 @@ class Net(nn.Module):
             loss = loss
         )
 
-def compute_metric(model_output, batch, mode):
+def compute_metric(model_output, batch, mode) -> argparse.Namespace:
     """
-    广播metric
+    广播metric，该函数返回的Namespace的values 需要支持sum操作（不同设备报错，迁移到cpu or item()）
     """
-    from zero2hero.dist import is_main_process, get_world_size
+    from zero2hero.dist import get_world_size
     global_metrics_list = [None] * get_world_size()
     if mode == 'train' or mode == 'valid':
         torch.distributed.all_gather_object(global_metrics_list, model_output)
