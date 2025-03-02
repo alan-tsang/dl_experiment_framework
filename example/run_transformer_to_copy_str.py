@@ -92,16 +92,25 @@ class Net(nn.Module):
         )
 
 def compute_metric(model_output, batch, mode):
-    if mode == 'train':
-        return model_output
-    elif mode == 'valid':
+    """
+    广播metric
+    """
+    from zero2hero.dist import is_main_process, get_world_size
+    global_metrics_list = [None] * get_world_size()
+    if mode == 'train' or mode == 'valid':
+        torch.distributed.all_gather_object(global_metrics_list, model_output)
+        for i in range(1, len(global_metrics_list)):
+            model_output.loss += global_metrics_list[i].loss
+        model_output.loss /= get_world_size()
         return model_output
     elif mode == 'test':
         x, y_shift = batch['x'], batch['y_shift']
         pred = model_output.logit.argmax(dim = -1)
-        return argparse.Namespace(
-            acc = (pred == y_shift).float().mean()
-        )
+        acc = (pred == y_shift).float().mean()
+        torch.distributed.all_gather_object(global_metrics_list, acc)
+        acc = sum(global_metrics_list) / get_world_size()
+
+        return argparse.Namespace(acc = acc)
 
 
 if __name__ == '__main__':
