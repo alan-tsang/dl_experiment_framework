@@ -7,6 +7,22 @@ import warnings
 
 _warning_cache = set()  # 全局缓存已触发警告的消息
 
+def set_proxy():
+    pass
+
+
+def set_seed(seed: int = 0):
+    """设置随机数种子"""
+    import random
+    import torch
+    import numpy as np
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 class Namespace:
     """
     Examples:
