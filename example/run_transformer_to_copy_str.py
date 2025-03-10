@@ -1,9 +1,13 @@
 import argparse
+import copy
 from argparse import Namespace
+from typing import Any, Sequence
 
 import torch
 from torch.utils.data import DataLoader, Dataset
 
+from zero2hero.eval.base_metric import BaseMetric, DumpResults
+from zero2hero.eval.evaluator import Evaluator
 from zero2hero.model import BaseModel, transformer
 from zero2hero.common.registry import registry
 from zero2hero.config.load_config import load_cfg
@@ -18,7 +22,9 @@ class CustomDataset(Dataset):
 
 
     def __len__(self):
+        # data_loader 根据这个返回值来决定每个epoch的迭代次数
         return self.data_n
+
 
     def __getitem__(self, idx):
         # 生成单个样本，这里假设每个样本是 max_len 长度的序列
@@ -90,27 +96,62 @@ class DemoNet(BaseModel):
             loss = loss
         )
 
-def compute_metric(model_output: argparse.Namespace, batch, mode) \
-        -> argparse.Namespace:
-    """
-    广播metric，该函数返回的Namespace的values 需要支持sum操作（不同设备报错，迁移到cpu or item()）
-    """
-    from zero2hero.dist import get_world_size
-    global_metrics_list = [None] * get_world_size()
-    if mode == 'train' or mode == 'valid':
-        torch.distributed.all_gather_object(global_metrics_list, model_output)
-        for i in range(1, len(global_metrics_list)):
-            model_output.loss += global_metrics_list[i].loss.item()
-        model_output.loss /= get_world_size()
-        return model_output
-    elif mode == 'test':
-        x, y_shift = batch['x'], batch['y_shift']
-        pred = model_output.logit.argmax(dim = -1)
-        acc = (pred == y_shift).float().mean().cpu()
-        torch.distributed.all_gather_object(global_metrics_list, acc)
-        acc = sum(global_metrics_list) / get_world_size()
+class MyMetric(BaseMetric):
+    def __init__(self, collect_device = 'cpu', prefix = 'demo_metric', collect_dir = './tmp' ):
+        super(MyMetric, self).__init__(collect_device, prefix, collect_dir)
+        self.dataset_meta = 'bench_demo'
 
-        return argparse.Namespace(acc = acc)
+    def process(self, data_batch: Any, data_samples: Sequence[dict]) -> None:
+        pred = data_samples.logit.argmax(dim = -1)
+        y_shift = data_batch['y_shift']
+        self.results.append([pred, y_shift])
+
+
+    def compute_metrics(self, results) -> dict:
+        acc = []
+        for result in results:
+            pred = result[0]
+            y_shift = result[1]
+            acc.append((pred == y_shift).float().mean().cpu())
+
+        acc = (sum(acc) / len(acc)).item()
+        registry.register("metric.valid_acc", acc)
+
+        return dict(valid_acc = acc)
+
+    def register_metrics(self, acc):
+        registry.register("metric.valid_acc", acc)
+
+
+class MyMetric2(BaseMetric):
+    def __init__(self, collect_device = 'cpu', prefix = 'demo_metric', collect_dir = './tmp' ):
+        super(MyMetric2, self).__init__(collect_device, prefix, collect_dir)
+        self.dataset_meta = 'bench_demo'
+
+    def process(self, data_batch: Any, data_samples: Sequence[dict]) -> None:
+        pred = data_samples.logit.argmax(dim = -1)
+        y_shift = data_batch['y_shift']
+        self.results.append([pred, y_shift])
+
+
+    def compute_metrics(self, results) -> dict:
+        acc = []
+        for result in results:
+            pred = result[0]
+            y_shift = result[1]
+            acc.append((pred == y_shift).float().mean().cpu())
+
+        acc = (sum(acc) / len(acc)).item()
+        registry.register("metric.test_acc", acc)
+
+        return dict(test_acc = acc)
+
+
+    def register_metrics(self, acc):
+        registry.register("metric.test_acc", acc)
+
+
+
 
 
 if __name__ == '__main__':
@@ -132,9 +173,11 @@ if __name__ == '__main__':
     model = registry.get_model_class(cfg.model.type)(**model_cfg)
     logit_generator = nn.Linear(model_cfg.d, model_cfg.vocab_n)
     net = DemoNet(model, logit_generator)
-    net.load_checkpoint('example/transformer_to_copy_str.pth')
+    # net.load_checkpoint('example/transformer_to_copy_str.pth')
 
     optimizer = torch.optim.AdamW(net.parameters(), lr = cfg.optimizer.lr)
+    evaluator = Evaluator([MyMetric(), DumpResults('./example/genarated.pkl')])
+    evaluator_test = Evaluator([MyMetric2(), DumpResults('./example/genarated.pkl')])
 
     runner = Runner(
         train_data_loader = bench_loader,
@@ -144,7 +187,8 @@ if __name__ == '__main__':
         epochs = cfg.training.epochs,
         optimizer = optimizer,
         runner_config = cfg,
-        metric_func = compute_metric
+        valid_evaluator = evaluator,
+        test_evaluator = evaluator_test
     )
     # runner.fit()
-    runner.valid()
+    runner.test()

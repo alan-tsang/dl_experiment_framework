@@ -27,7 +27,8 @@ pt:
   pt_save: true
   pt_save_dir: "./checkpoints"
   pt_save_n_epochs: 1
-  pt_best_monitor: "loss"
+  pt_best_monitor:
+    loss: false
   pt_topk: 3
 wandb:
   wandb_enable: true

@@ -13,11 +13,11 @@ class WandbCallback(BaseCallBack):
         super().on_register()
         if registry.get("is_main_process") and registry.get("cfg.wandb.wandb_enable") and wandb.run is None:
             wandb.init(
-                project=registry.get("cfg.wandb.wandb_proj_name"),
+                project=registry.get("cfg.wandb.wandb_project_name"),
                 name=registry.get("cfg.run_name"),
                 notes = registry.get("cfg.run_description"),
                 mode="offline" if registry.get("cfg.wandb.wandb_offline") else "online",
-                config = registry.get("cfg"),
+                config = dict(registry.get("cfg")),
                 dir = registry.get("cfg.wandb.wandb_dir"),
                 save_code = True,
                 tags = registry.get("cfg.wandb.wandb_tags")
@@ -30,6 +30,7 @@ class WandbCallback(BaseCallBack):
 
     def after_running_batch(self):
         if wandb.run is not None:
-            for key, value in registry.get("metric").items():
-                wandb.log({key: value})
-
+            metrics = registry.get("metric")
+            if metrics is not None:
+                for key, value in metrics.items():
+                    wandb.log({key: value})

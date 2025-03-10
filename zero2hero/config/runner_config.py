@@ -1,3 +1,6 @@
+"""弃用
+
+"""
 from typing import Dict, List
 
 from pydantic import BaseModel, Field

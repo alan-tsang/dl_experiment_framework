@@ -37,7 +37,8 @@ pt:
   pt_save: true
   pt_save_dir: "./checkpoints"
   pt_save_n_epochs: 1
-  pt_best_monitor: "loss"
+  pt_best_monitor:
+    loss: false
   pt_topk: 3
 wandb:
   wandb_enable: true
@@ -49,14 +50,9 @@ training:
   epochs: 10
   print_model: true
   fp16: false
-  # training_monitor should include all the metrics you want to monitor
-  # in all callbacks and training loop
-  train_monitor:
+  progress_show:
     loss: false
-  valid_monitor:
-    loss: false
-  test_monitor:
-    acc: true
+    test_acc: true
   valid_every_n_epochs: 1
   test_every_n_epochs: 1
   progress_every_n_epochs: 1

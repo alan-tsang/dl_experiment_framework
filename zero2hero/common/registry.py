@@ -11,6 +11,8 @@ class Registry:
         "model_name_mapping": {},
         "lr_scheduler_name_mapping": {},
         "runner_name_mapping": {},
+        "evaluator_name_mapping": {},
+        "metric_name_mapping": {},
         "callback_name_mapping": {},
         "state": {},
         "paths": {},
@@ -44,6 +46,52 @@ class Registry:
             return model_cls
 
         return wrap
+
+    @classmethod
+    def register_metric(cls, name):
+        r"""Register a task to registry with key 'name'
+
+        Args:
+            name: Key with which the task will be registered.
+
+        Usage:
+
+            from pipeline.common.registry import registry
+        """
+
+        def wrap(metric_cls):
+            from ..eval.base_metric import BaseMetric
+
+            assert issubclass(
+                metric_cls, BaseMetric
+            ), "All Metrics must inherit BaseMetric class"
+            if name in cls.mapping["metric_name_mapping"]:
+                raise KeyError(
+                    "Name '{}' already registered for {}.".format(
+                        name, cls.mapping["metric_name_mapping"][name]
+                    )
+                )
+            cls.mapping["metric_name_mapping"][name] = metric_cls
+            return metric_cls
+
+        return wrap
+
+
+
+    @classmethod
+    def register_evaluator(cls, name):
+        def wrap(evaluator_cls):
+            if name in cls.mapping["evaluator_name_mapping"]:
+                raise KeyError(
+                    "Name '{}' already registered for {}.".format(
+                        name, cls.mapping["evaluator_name_mapping"][name]
+                    )
+                )
+            cls.mapping["evaluator_name_mapping"][name] = evaluator_cls
+            return evaluator_cls
+
+        return wrap
+
 
     @classmethod
     def register_callback(cls, name):
@@ -162,6 +210,13 @@ class Registry:
     def get_model_class(cls, name):
         return cls.mapping["model_name_mapping"].get(name, None)
 
+    @classmethod
+    def get_evaluator_class(cls, name):
+        return cls.mapping["evaluator_name_mapping"].get(name, None)
+
+    @classmethod
+    def get_metric_class(cls, name):
+        return cls.mapping["metric_name_mapping"].get(name, None)
 
     @classmethod
     def get_lr_scheduler_class(cls, name):
@@ -186,6 +241,14 @@ class Registry:
     @classmethod
     def list_callbacks(cls):
         return sorted(cls.mapping["callback_name_mapping"].keys())
+
+    @classmethod
+    def list_evaluators(cls):
+        return cls.mapping["evaluator_name_mapping"].keys()
+
+    @classmethod
+    def list_metrics(cls):
+        return cls.mapping["metric_name_mapping"].keys()
 
 
     @classmethod

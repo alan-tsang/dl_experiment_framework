@@ -8,10 +8,9 @@
 
 ================
 """
+
 import argparse
 import contextlib
-import warnings
-from typing import List
 
 import deepspeed
 import torch
@@ -33,32 +32,40 @@ from ..dist.init import is_main_process, main_process
 class Runner(RunnerBase):
     def __init__(
             self,
+            model: nn.Module,
             train_data_loader,
             valid_data_loader,
             test_data_loader,
-            model: nn.Module,
-            epochs,
+            train_evaluator = None,
+            valid_evaluator = None,
+            test_evaluator = None,
+            epochs = None,
             optimizer = None,
             callbacks = None,
             runner_config: RunnerConfig = None,
-            metric_func = None,
             *args,
             **kwargs,
     ):
         super().__init__()
         self.model = model
-        # NOTE: 启用deepspeed时，optimizer可以为空
-        self.optimizer = optimizer
+
         self.train_data_loader = train_data_loader
         self.valid_data_loader = valid_data_loader
         self.test_data_loader = test_data_loader
+        self.train_evaluator = train_evaluator
+        self.valid_evaluator = valid_evaluator
+        self.test_evaluator = test_evaluator
+
+        # NOTE: 启用deepspeed时，optimizer可以为空
         self.epochs = epochs
+        self.optimizer = optimizer
 
         self.callbacks = callbacks if callbacks is not None else []
-        self.scheduler = None
         self.runner_config = runner_config or RunnerConfig()
-        self.compute_metric = metric_func if metric_func else self.compute_metric
 
+        self.scheduler = None
+
+        self._assign_runtime_cfg()
         self._assign_runner_cfg(self.runner_config)
         self._assign_logger()
         self._apply_launch_strategy()
@@ -99,19 +106,17 @@ class Runner(RunnerBase):
             self.train_data_loader.sampler.set_epoch(current_epoch)
             data = self._move_train_data_to_device(data)
             with self.maybe_autocast(is_fp16):
-                output, _ = self.train_step(data)
-            assert "loss" in output, ("train_step必须返回包含loss的Namespace, "
-                                      "其默认行为是直接返回模型输出"
-                                      "因此要么模型forward返回含loss的Namespace(推荐)"
-                                      "要么改写train_step方法返回含loss的Namespace")
-            self.backward(scaler, output.loss)
+                model_output, _ = self.train_step(data)
+            assert "loss" in model_output, "模型输出必须返回包含loss的Namespace"
+            self.backward(scaler, model_output.loss)
+            registry.register("metric.loss", model_output.loss)
             self.after_running_batch()
 
 
     def train_step(self, batch) -> tuple[any, argparse.Namespace]:
         """
         Must Returns:
-            Loss
+            Loss in the model_output
         """
         if registry.get("current_step") is None:
             registry.register("current_step", 0)
@@ -119,13 +124,19 @@ class Runner(RunnerBase):
             registry.register("current_step", registry.get("current_step") + 1)
         self.model.train()
         model_output = self.model(**batch)
+        metric_val = None
+        if self.train_evaluator:
+            metric_val = self.train_evaluator.process(model_output, batch)
 
-        metric_value = self.compute_metric(model_output, batch, "train")
-        metric_value = self.filter_metric(metric_value, "train")
+        return model_output, metric_val
 
-        self.register_metrics_values(metric_value)
-
-        return model_output, metric_value
+    @staticmethod
+    def maybe_autocast(enabled: bool = False):
+        device_enable = registry.get("device") != torch.device("cpu")
+        if enabled and device_enable:
+            return torch.cuda.amp.autocast(dtype = torch.float16)
+        else:
+            return contextlib.nullcontext()
 
 
     def backward(self, scaler, loss):
@@ -149,74 +160,79 @@ class Runner(RunnerBase):
 
     @torch.no_grad()
     def valid(self):
-        if self.valid_data_loader:
-            def fn(is_valid_clone = False):
-                self.model.eval()
-                metrics = []
-                for batch_i, data in enumerate(self.valid_data_loader):
-                    data = self._move_valid_data_to_device(data)
-                    metric_filter = self.valid_step(data)
-                    metrics.append(metric_filter)
-                    if is_valid_clone:
-                        self.logger.info(f"VALID: {metric_filter}")
-                        self.wandb_log(vars(metric_filter))
-
-                self.logger.info(f"VALID Summary: {self.average_batch_metric(metrics)}")
-                self.wandb_log(vars(self.average_batch_metric(metrics)))
-                self.model.train()
-
-            current_epoch = registry.get("current_epoch")
-            if current_epoch is not None:
-                if (current_epoch + 1) % registry.get("cfg.training.valid_every_n_epochs") == 0:
-                    fn(is_valid_clone = False)
-            else:
-                fn(is_valid_clone = True)
-        else:
+        """for dynamic cover, this func is Not merged with test"""
+        if self.valid_data_loader is None:
             first_call_warning("valid", "未提供valid_data_loader，跳过valid")
+            return
+
+        if self.valid_evaluator is None:
+            first_call_warning("valid_evaluator", "未提供valid_evaluator")
+
+        current_epoch = registry.get("current_epoch")
+        if current_epoch is None:
+            should_valid = True
+        elif (current_epoch + 1) % registry.get("cfg.training.valid_every_n_epochs") == 0:
+            should_valid = True
+        else:
+            should_valid = False
+
+        if not should_valid:
+            return
+
+        self.model.eval()
+        for batch_i, data in enumerate(self.valid_data_loader):
+            data = self._move_valid_data_to_device(data)
+            model_output = self.valid_step(data)
+
+        if self.valid_evaluator:
+            eval_result = self.valid_evaluator.evaluate(self.valid_size)
+            self.logger.info(f"Valid Summary: {eval_result}")
+            self.wandb_log(eval_result)
+            self.model.train()
 
 
     def valid_step(self, batch):
         model_output = self.model(**batch)
-        metric_value = self.compute_metric(model_output, batch, "valid")
-        metric_filter = self.filter_metric(metric_value, "valid")
-        self.register_metrics_values(metric_filter)
-        return metric_filter
+        self.valid_evaluator.process(model_output, batch)
+        return model_output
 
 
     @torch.no_grad()
-    def test(self, *args, **kwargs):
-        if not self.test_data_loader:
+    def test(self):
+        if self.test_data_loader is None:
             first_call_warning("test", "未提供test_data_loader，跳过test")
             return
 
-        def fn(is_test_clone = False):
-            self.model.eval()
-            metrics = []
-            for batch_i, data in enumerate(self.test_data_loader):
-                data = self._move_test_data_to_device(data)
-                metric_filter = self.test_step(data)
-                metrics.append(metric_filter)
-                if is_test_clone:
-                    self.logger.info(f"TEST: {metric_filter}")
-                    self.wandb_log(vars(metric_filter))
-            self.logger.info(f"TEST Summary: {self.average_batch_metric(metrics)}")
-            self.wandb_log(vars(self.average_batch_metric(metrics)))
-            self.model.train()
+        if self.test_evaluator is None:
+            first_call_warning("test_evaluator", "未提供test_evaluator")
 
         current_epoch = registry.get("current_epoch")
-        if current_epoch is not None:
-            if (current_epoch + 1) % registry.get("cfg.training.test_every_n_epochs") == 0:
-                fn(is_test_clone = False)
+        if current_epoch is None:
+            should_test = True
+        elif (current_epoch + 1) % registry.get("cfg.training.test_every_n_epochs") == 0:
+            should_test = True
         else:
-            fn(is_test_clone = True)
+            should_test = False
+
+        if not should_test:
+            return
+
+        self.model.eval()
+        for batch_i, data in enumerate(self.test_data_loader):
+            data = self._move_test_data_to_device(data)
+            model_output = self.test_step(data)
+
+        if self.test_evaluator:
+            eval_result = self.test_evaluator.evaluate(self.test_size)
+            self.logger.info(f"Test Summary: {eval_result}")
+            self.wandb_log(eval_result)
+            self.model.train()
+
 
     def test_step(self, batch):
         model_output = self.model(**batch)
-        metric_value = self.compute_metric(model_output, batch, "test")
-        metric_filter = self.filter_metric(metric_value, "test")
-        # train、test共有的metric值会覆盖
-        self.register_metrics_values(metric_filter)
-        return metric_filter
+        self.test_evaluator.process(model_output, batch)
+        return model_output
 
 
     def before_all(self):
@@ -235,74 +251,16 @@ class Runner(RunnerBase):
             dist.destroy_process_group()
 
 
-    def compute_metric(self, model_output, batch, mode: str) -> argparse.Namespace:
-        """
-        Note: this is a placeholder, you should implement it
-            or make model_output contain the metric value you want to monitor
-        """
-        first_call_warning("metric",
-                           "compute_metric方法未实现，metric计算直接返回模型输出")
-        return model_output
-
-    @staticmethod
-    def filter_metric(metrics: argparse.Namespace, mode: str):
-        should_monitor = list(registry.get(f"cfg.training.{mode}_monitor").keys())
-        monitored = list(vars(metrics).keys())
-        if not all([m in monitored for m in should_monitor]):
-            first_call_warning(
-                f"filter_metric_{mode}",
-                f"{mode} 时期，compute_metric 返回的Namespace中缺少监控的keys;"
-                f"应该包含：{should_monitor}，实际包含：{monitored}"
-            )
-        filtered_metrics = argparse.Namespace()
-        for key, value in vars(metrics).items():
-            if key in should_monitor:
-                setattr(filtered_metrics, key, value)
-        return filtered_metrics
-
-    # 要求metric里的值支持sum
-    @staticmethod
-    def average_batch_metric(metrics: List[argparse.Namespace]) -> argparse.Namespace:
-        """
-        average metrics in different data loader' s batches
-        """
-        if not metrics:
-            return argparse.Namespace()
-        average_metric = argparse.Namespace()
-        for key in vars(metrics[0]).keys():
-            values = [getattr(metric, key) for metric in metrics]
-            average = sum(values) / len(values)
-            setattr(average_metric, key, average)
-        return average_metric
-
-
-    @staticmethod
-    def register_metrics_values(metrics: argparse.Namespace):
-        for key, value in vars(metrics).items():
-            registry.register(f"metric.{key}", value)
-
-
     @main_process
     def wandb_log(self, log_dict):
         if registry.get("cfg.wandb.wandb_enable") and wandb.run is not None:
             wandb.log(log_dict)
             self.logger.info(f"wandb记录：{log_dict}")
 
-    @main_process
-    def just_log(self, msg):
-        self.logger.just_print(msg)
-
-    @staticmethod
-    def maybe_autocast(enabled: bool = False):
-        device_enable = registry.get("device") != torch.device("cpu")
-        if enabled and device_enable:
-            return torch.cuda.amp.autocast(dtype = torch.float16)
-        else:
-            return contextlib.nullcontext()
 
     @staticmethod
     def _assign_runner_cfg(cfg: RunnerConfig):
-        registry.register("cfg", RunnerConfig.model_validate(cfg))
+        registry.register("cfg", cfg)
 
     def _assign_logger(self):
         # 有的话就用已创建的，忽略参数
@@ -315,6 +273,11 @@ class Runner(RunnerBase):
             # folder = registry.get("cfg.log.folder"),
             run_name = registry.get("cfg.run_name")
         )
+    def _assign_runtime_cfg(self):
+        if self.valid_data_loader:
+            self.valid_size = len(self.valid_data_loader)
+        if self.test_data_loader:
+            self.test_size = len(self.test_data_loader)
 
     def _apply_launch_strategy(self):
         model_info = get_model_info(self.model)
@@ -447,4 +410,3 @@ class Runner(RunnerBase):
 
     def _move_test_data_to_device(self, data):
         return self._move_train_data_to_device(data)
-

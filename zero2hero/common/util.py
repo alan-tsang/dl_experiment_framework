@@ -7,6 +7,17 @@ import warnings
 
 _warning_cache = set()  # 全局缓存已触发警告的消息
 
+class Namespace:
+    """
+    Examples:
+        > args_dict = {'name': 'John', 'age': 25, 'city': 'Example City'}
+        > namespace_obj = Namespace(args_dict)
+    """
+
+    def __init__(self, args: dict):
+        for k, v in args.items():
+            setattr(self, k, v)
+
 def first_call_warning(key, message: str):
     """生成一个函数，该函数在首次调用时触发警告，后续调用无操作"""
     if key not in _warning_cache:

@@ -9,7 +9,7 @@ from ..common.registry import registry
 @registry.register_callback("progress")
 class ProcessCallBack(BaseCallBack):
     """
-
+    打印训练进度，以及train_monitor监控的值
     """
     def __init__(
         self, epochs, batchs
@@ -20,7 +20,7 @@ class ProcessCallBack(BaseCallBack):
         self.every_n_epoch = None
         self.every_n_batches = None
         train_avg_meter = []
-        train_monitors = registry.get("cfg.training.train_monitor")
+        train_monitors = registry.get("cfg.training.progress_show")
         for key, value in train_monitors.items():
             train_avg_meter.append(
                 AverageMeter(monitor = key, greater_is_better = value)
@@ -115,6 +115,7 @@ class ProgressMeter:
 
         # return "[" + fmt + f"/{n}" + "]"
         return fmt + f"/{n}"
+
 
 class AverageMeter:
     """Computes and stores the average and current value"""

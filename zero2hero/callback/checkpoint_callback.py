@@ -15,6 +15,7 @@ from ..common.util import now
 class CheckpointCallback(BaseCallBack):
     """
     保存训练过程中的模型检查点，支持多种保存策略。
+    当前监控的值是train_monitor参数指定的
 
     目录结构示例：
     - folder/
@@ -56,8 +57,6 @@ class CheckpointCallback(BaseCallBack):
     def on_register(self):
         super().on_register()
         self.topk = registry.get("cfg.pt.pt_topk")
-        self.monitor = registry.get("cfg.pt.pt_best_monitor")
-        self._validate_init_params(self.topk, self.monitor)
 
         self.folder = self._generate_run_folder(
             base_folder = registry.get("cfg.pt.pt_save_dir"),
@@ -69,8 +68,11 @@ class CheckpointCallback(BaseCallBack):
         self.every_n_epochs = registry.get("cfg.pt.pt_save_n_epochs")
         self.every_n_batches = registry.get("cfg.pt.pt_save_n_batches")
 
-        self.monitor_greater_is_better = registry.get\
-            (f"cfg.training.train_monitor.{self.monitor}")
+        monitor = list(registry.get("cfg.pt.pt_best_monitor").items())[0]
+        self.monitor = monitor[0]
+        self._validate_init_params(self.topk, self.monitor)
+
+        self.monitor_greater_is_better = monitor[1]
 
         # 状态跟踪
         self.topk_models: List[Dict] = []
