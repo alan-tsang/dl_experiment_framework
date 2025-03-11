@@ -13,6 +13,7 @@ class Registry:
         "runner_name_mapping": {},
         "evaluator_name_mapping": {},
         "metric_name_mapping": {},
+        "dataset_name_mapping": {},
         "callback_name_mapping": {},
         "state": {},
         "paths": {},
@@ -76,6 +77,34 @@ class Registry:
 
         return wrap
 
+    @classmethod
+    def register_dataset(cls, name):
+        r"""Register a task to registry with key 'name'
+
+        Args:
+            name: Key with which the task will be registered.
+
+        Usage:
+
+            from pipeline.common.registry import registry
+        """
+
+        def wrap(dataset_cls):
+            from ..dataset.base_dataset import BaseDataset
+
+            assert issubclass(
+                dataset_cls, BaseDataset
+            ), "All datasets must inherit BaseDataset class"
+            if name in cls.mapping["dataset_name_mapping"]:
+                raise KeyError(
+                    "Name '{}' already registered for {}.".format(
+                        name, cls.mapping["dataset_name_mapping"][name]
+                    )
+                )
+            cls.mapping["dataset_name_mapping"][name] = dataset_cls
+            return dataset_cls
+
+        return wrap
 
 
     @classmethod
@@ -166,6 +195,8 @@ class Registry:
 
         return wrap
 
+
+
     @classmethod
     def register_path(cls, name, path):
         r"""Register a path to registry with key 'name'
@@ -211,6 +242,10 @@ class Registry:
         return cls.mapping["model_name_mapping"].get(name, None)
 
     @classmethod
+    def get_dataset_class(cls, name):
+        return cls.mapping["dataset_name_mapping"].get(name, None)
+
+    @classmethod
     def get_evaluator_class(cls, name):
         return cls.mapping["evaluator_name_mapping"].get(name, None)
 
@@ -237,6 +272,10 @@ class Registry:
     @classmethod
     def list_models(cls):
         return sorted(cls.mapping["model_name_mapping"].keys())
+
+    @classmethod
+    def list_datasets(cls):
+        return sorted(cls.mapping["dataset_name_mapping"].keys())
 
     @classmethod
     def list_callbacks(cls):

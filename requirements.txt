@@ -1,11 +1,11 @@
 deepspeed==0.16.2
-matplotlib==3.10.1
-numpy==2.2.3
+matplotlib~=3.9.1
+numpy~=1.26.4
 nvidia_ml_py==12.570.86
 omegaconf==2.3.0
 packaging==24.2
-pandas==2.2.3
-pydantic==2.10.6
+pandas~=2.2.2
+pydantic~=2.10.4
 pynvml==12.0.0
 PyYAML==6.0.2
 PyYAML==6.0.2
@@ -13,4 +13,9 @@ rich==13.9.4
 scikit_learn==1.6.1
 setuptools==75.1.0
 torch>=1.11.0
-wandb==0.19.7
+wandb~=0.19.1
+
+nvidia-ml-py~=12.570.86
+scikit-learn~=1.2.2
+datasets~=2.20.0
+dataclasses~=0.6
