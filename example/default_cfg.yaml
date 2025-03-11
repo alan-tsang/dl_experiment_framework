@@ -52,7 +52,7 @@ training:
   fp16: false
   progress_show:
     loss: false
-    test_acc: true
+    acc: true
   valid_every_n_epochs: 1
   test_every_n_epochs: 1
   progress_every_n_epochs: 1

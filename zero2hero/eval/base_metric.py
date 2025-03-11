@@ -10,8 +10,6 @@ from ..common.util import first_call_warning
 from ..dist import (broadcast_object_list, collect_results,
                            is_main_process)
 
-from ..common.io import dump
-
 
 class BaseMetric(metaclass=ABCMeta):
     """Base class for a metric.
