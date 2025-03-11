@@ -1,11 +1,15 @@
 # zero2hero
 personal deeplearning experient framework
 
+## news
+March 11, 2025: support experiment dataset integration based on datasets
+
 ## environment
 + [x] pytorch
 + [x] wandb
 + [x] omegaconf
 + [x] deepspeed
++ [x] datasets
 
 ## support
 + [x] multi experiment

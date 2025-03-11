@@ -1,8 +1,11 @@
 import os
 from typing import Union, Optional, Callable, List, Dict
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
+import warnings
+
 from .base_dataset import BaseDataset
 from ..common.registry import registry
+
 
 @registry.register_dataset("BaseMapDataset")
 class BaseMapDataset(BaseDataset):
@@ -180,6 +183,12 @@ class BaseIterableDataset(BaseDataset):
             "streaming": True,
             "features": self.dataset.features if hasattr(self.dataset, 'features') else None
         }
+
+    def save_to_disk(self, path: str):
+        warnings.warn("流式数据集不支持保存到磁盘。")
+
+        return
+
 
 
 def infer_data_format(path: str) -> Optional[str]:

@@ -1,7 +1,3 @@
-"""不知道怎么用dataset.from_dict
-
-"""
-from zero2hero.dataset.base_dataset import BaseDataset
 from zero2hero.dataset.dataset import BaseIterableDataset, BaseMapDataset
 from datasets import Dataset
 
@@ -28,6 +24,8 @@ if __name__ == "__main__":
     iterable_data_loader = dataset1.get_batch_loader(batch_size=2)
     for i in iterable_data_loader:
         print(i)
+    # print(dataset1.dataset_card)
+
 
     dataset2 = BaseMapDataset(
         data_source = './local_movie_reviews.json',
@@ -52,6 +50,7 @@ if __name__ == "__main__":
 
     print("\n数据集卡片：")
     print(dataset2.dataset_card)
+    print(len(dataset2.get_subset(list(range(10)))))
 
     # dataset2.save_to_disk(save_path)
 

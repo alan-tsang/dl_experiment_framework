@@ -4,7 +4,7 @@ run_name: experiment-01
 run_description: "this is a demo run"
 # here is my model and data
 # it depends on the project
-data:
+dataset:
   - type:
     args:
   - type:
