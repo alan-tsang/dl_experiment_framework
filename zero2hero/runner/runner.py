@@ -42,7 +42,7 @@ class Runner(RunnerBase):
             epochs = None,
             optimizer = None,
             callbacks = None,
-            runner_config: RunnerConfig = None,
+            runner_config: dict = None,
             *args,
             **kwargs,
     ):
@@ -61,7 +61,7 @@ class Runner(RunnerBase):
         self.optimizer = optimizer
 
         self.callbacks = callbacks if callbacks is not None else []
-        self.runner_config = runner_config or RunnerConfig()
+        self.runner_config = runner_config
 
         self.scheduler = None
 
@@ -259,7 +259,7 @@ class Runner(RunnerBase):
 
 
     @staticmethod
-    def _assign_runner_cfg(cfg: RunnerConfig):
+    def _assign_runner_cfg(cfg: dict):
         registry.register("cfg", cfg)
 
     def _assign_logger(self):
