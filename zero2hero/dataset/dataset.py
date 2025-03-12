@@ -31,15 +31,22 @@ class BaseMapDataset(BaseDataset):
         self._set_dataset(data_source)
 
         # 自动数据集划分
-        if split_ratios and isinstance(self.dataset, Dataset):
-            self.auto_split(split_ratios)
+        if split_ratios:
+            if isinstance(self.dataset, DatasetDict):
+                warnings.warn("DatasetDict对象已经包含了多个划分，自动划分将被忽略")
+            if isinstance(self.dataset, Dataset):
+                self.auto_split(split_ratios)
 
-        self._prepare_data()
+        if process_fn is None and filter_fn is None:
+            pass
+        else:
+            self._prepare_data()
 
 
-    def _set_dataset(self, data_source, data_format=None):
+    def _set_dataset(self, data_source, data_format=None) -> Dataset or DatasetDict:
         # 加载数据集
         if isinstance(data_source, str):
+            """return a Dataset object"""
             if os.path.exists(data_source):
                 if data_format is None:
                     data_format = infer_data_format(data_source)
@@ -48,9 +55,13 @@ class BaseMapDataset(BaseDataset):
 
                 self.dataset = load_dataset(
                     data_format,
+                    # 本地加载数据集，我往往不手动分割数据集，所以默认加载train集实际就是全部数据
+                    # 后续再分割
+                    split = 'train',
                     data_files=data_source,
                 )
             else:
+                """return a DatasetDict object"""
                 # HuggingFace Hub 名称
                 self.dataset = load_dataset(data_source, streaming=True)
 
@@ -60,13 +71,16 @@ class BaseMapDataset(BaseDataset):
             raise ValueError("不支持的数据源类型")
 
 
-    def auto_split(self, ratios: tuple):
+    def auto_split(self, ratios: tuple) -> DatasetDict:
         """
-        不确定能不能支持流式数据集
+
         :param ratios:
         :return:
         """
         """自动划分训练/验证/测试集"""
+        if isinstance(self.dataset, DatasetDict):
+            return
+
         train_ratio, val_ratio, test_ratio = ratios
         total = sum(ratios)
         train_size = train_ratio / total
@@ -81,22 +95,31 @@ class BaseMapDataset(BaseDataset):
             {
                 "train": train_temp["train"],
                 "val": val_test["train"],
-                "test": val_test["test"]
+                "test": val_test["test"],
             }
-        )[self.split]
+        )
 
 
-    def get_subset(self, indices: List[int]) -> "BaseMapDataset":
+    def get_subset(self, split, indices: List[int]) -> "BaseMapDataset":
         """获取子集"""
+        if isinstance(self.dataset, DatasetDict):
+            return BaseMapDataset(
+                data_source = self.dataset[split].select(indices),
+                process_fn = self.process_fn,
+                filter_fn = self.filter_fn,
+                metadata = self.metadata
+            )
         return BaseMapDataset(
             data_source = self.dataset.select(indices),
-            split = self.split,
             process_fn = self.process_fn,
             filter_fn = self.filter_fn,
             metadata = self.metadata
         )
 
-    def get_split(self, split: str) -> "BaseMapDataset":
+
+    def get_split(self, split: str) -> Dataset:
+        if isinstance(self.dataset, Dataset):
+            raise Exception("Dataset对象没有划分，无法获取子集")
         return self.dataset[split]
 
 
