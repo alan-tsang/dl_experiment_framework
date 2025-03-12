@@ -1,4 +1,4 @@
-from .dataset import (BaseMapDataset, BaseIterableDataset)
+from .dataset import (BaseMapDataset, BaseIterableDataset, BaseDataset)
 from .model import (TransformerForClassification, TransformerForCausalLLM,
                     TransformerForConditionalLLM, BaseModel)
 from .eval import  (Evaluator, BaseMetric, DumpResults)

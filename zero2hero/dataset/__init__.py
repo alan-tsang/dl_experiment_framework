@@ -1,1 +1,1 @@
-from .dataset import BaseIterableDataset, BaseMapDataset
+from .dataset import BaseIterableDataset, BaseMapDataset, BaseDataset
