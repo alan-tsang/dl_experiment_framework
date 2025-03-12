@@ -16,7 +16,6 @@ class BaseMapDataset(BaseDataset):
         filter_fn: Optional[Callable[[Dict], bool]] = None,
         metadata: Optional[Dict] = None,
         data_format: Optional[str] = None,
-        split: str = "train",
         split_ratios: Optional[tuple] = (0.8, 0.1, 0.1),
         *args,
         **kwargs
@@ -28,9 +27,8 @@ class BaseMapDataset(BaseDataset):
             metadata,
             data_format
         )
-        self.split = split
         self.split_ratios = split_ratios
-        self._set_dataset(data_source, split = split)
+        self._set_dataset(data_source)
 
         # 自动数据集划分
         if split_ratios and isinstance(self.dataset, Dataset):
@@ -39,7 +37,7 @@ class BaseMapDataset(BaseDataset):
         self._prepare_data()
 
 
-    def _set_dataset(self, data_source, split, data_format=None):
+    def _set_dataset(self, data_source, data_format=None):
         # 加载数据集
         if isinstance(data_source, str):
             if os.path.exists(data_source):
@@ -50,7 +48,6 @@ class BaseMapDataset(BaseDataset):
 
                 self.dataset = load_dataset(
                     data_format,
-                    split = split,
                     data_files=data_source,
                 )
             else:
@@ -58,7 +55,7 @@ class BaseMapDataset(BaseDataset):
                 self.dataset = load_dataset(data_source, streaming=True)
 
         elif isinstance(data_source, (Dataset, DatasetDict)):
-            self.dataset = data_source[split] if isinstance(data_source, DatasetDict) else data_source
+            self.dataset = data_source
         else:
             raise ValueError("不支持的数据源类型")
 
@@ -98,6 +95,9 @@ class BaseMapDataset(BaseDataset):
             filter_fn = self.filter_fn,
             metadata = self.metadata
         )
+
+    def get_split(self, split: str) -> "BaseMapDataset":
+        return self.dataset[split]
 
 
     def __len__(self) -> int:

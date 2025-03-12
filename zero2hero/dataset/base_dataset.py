@@ -45,6 +45,7 @@ class BaseDataset(ABC):
             sampler = None,
             num_workers: int = 0,
             collate_fn = None,
+            shuffle: bool = False,
             **loader_kwargs
     ) -> DataLoader:
         """获取PyTorch数据加载器"""
@@ -56,7 +57,7 @@ class BaseDataset(ABC):
             sampler = sampler,
             num_workers = num_workers,
             collate_fn = collate_fn,
-            shuffle = False,
+            shuffle = shuffle,
             **loader_kwargs
         )
 
