@@ -50,7 +50,7 @@ class BaseModel(nn.Module):
 
         example:
         >>> cfg = {
-        ... "model_type": "TransformersToy",
+        ... "type": "TransformersToy",
         ... "layers": 6
         ... }
         >>> model = BaseModel.from_cfg(cfg)
@@ -70,14 +70,14 @@ class BaseModel(nn.Module):
             config_dict = vars(cfg) if not isinstance(cfg, dict) else cfg
 
         # 动态获取子类构造器（允许继承时自动匹配）
-        if 'model_type' in config_dict:
+        if 'type' in config_dict:
             # 多态 + 注册机制
             """
             model = BaseModel.from_cfg(cfg)
             """
             from ..common.registry import registry
-            registry.get_model_class(config_dict['model_type'])
-            model_cls = registry.get_model_class(config_dict['model_type'])
+            registry.get_model_class(config_dict['type'])
+            model_cls = registry.get_model_class(config_dict['type'])
 
         elif cls != BaseModel:
             # 如果直接通过子类调用，使用子类自身
@@ -86,7 +86,7 @@ class BaseModel(nn.Module):
             """
             model_cls = cls
         else:
-            raise ValueError("Must specify model_type when using BaseModel directly")
+            raise ValueError("Must specify type when using BaseModel directly")
 
         # 提取模型构造参数（过滤非法参数）
         valid_args = inspect.signature(model_cls.__init__).parameters
