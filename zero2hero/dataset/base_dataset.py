@@ -37,9 +37,10 @@ class BaseDataset(ABC):
     def _set_dataset(self, *args, **kwargs):
         pass
 
-
+    @classmethod
     def get_batch_loader(
-            self,
+            cls,
+            dataset,
             batch_size: int = 1,
             pin_memory: bool = False,
             sampler = None,
@@ -49,7 +50,7 @@ class BaseDataset(ABC):
             **loader_kwargs
     ) -> DataLoader:
         """获取PyTorch数据加载器"""
-        formatted_dataset = self.dataset.with_format("torch")
+        formatted_dataset = dataset.with_format("torch")
         return DataLoader(
             formatted_dataset,  # 转换为PyTorch Dataset
             batch_size = batch_size,
@@ -62,7 +63,6 @@ class BaseDataset(ABC):
         )
 
     def _prepare_data(self):
-        """应用预处理和过滤"""
         self.dataset = self.dataset.map(self.process_fn).filter(self.filter_fn)
 
     def save_to_disk(self, path: str):
