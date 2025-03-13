@@ -49,6 +49,12 @@ class Evaluator:
         for metric in self.metrics:
             metric.process(data_batch, data_samples)
 
+    @staticmethod
+    def register_metrics(metrics: dict):
+        # 判断是否为omegaconf
+        for key, value in metrics.items():
+            registry.register(f"metric.{key}", value)
+
 
     def evaluate(self, size: int) -> dict:
         """Invoke ``evaluate`` method of each metric and collect the metrics
@@ -78,6 +84,9 @@ class Evaluator:
                         'have different prefixes.')
 
             metrics.update(_results)
+
+        self.register_metrics(metrics)
+
         return metrics
 
 

@@ -115,12 +115,10 @@ class MyMetric(BaseMetric):
             acc.append((pred == y_shift).float().mean().cpu())
 
         acc = (sum(acc) / len(acc)).item()
-        registry.register("metric.valid_acc", acc)
 
         return dict(valid_acc = acc)
 
-    def register_metrics(self, acc):
-        registry.register("metric.valid_acc", acc)
+
 
 
 class MyMetric2(BaseMetric):
@@ -142,16 +140,8 @@ class MyMetric2(BaseMetric):
             acc.append((pred == y_shift).float().mean().cpu())
 
         acc = (sum(acc) / len(acc)).item()
-        registry.register("metric.test_acc", acc)
 
         return dict(test_acc = acc)
-
-
-    def register_metrics(self, acc):
-        registry.register("metric.test_acc", acc)
-
-
-
 
 
 if __name__ == '__main__':
