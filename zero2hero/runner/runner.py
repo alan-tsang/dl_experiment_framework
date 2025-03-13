@@ -25,7 +25,7 @@ from ..common.dl_util import get_batch_n, get_model_info
 from ..common.logger import Logger
 from ..common.registry import registry
 from ..common.util import first_call_warning
-from ..config.runner_config import RunnerConfig
+
 from ..dist.init import is_main_process, main_process
 
 
@@ -107,13 +107,13 @@ class Runner(RunnerBase):
             data = self._move_train_data_to_device(data)
             with self.maybe_autocast(is_fp16):
                 model_output, _ = self.train_step(data)
-            assert "loss" in model_output, "模型输出必须返回包含loss的Namespace"
-            self.backward(scaler, model_output.loss)
-            registry.register("metric.loss", model_output.loss)
+            assert "loss" in model_output, "模型输出必须返回包含loss的字典"
+            self.backward(scaler, model_output["loss"])
+            registry.register("metric.loss", model_output["loss"])
             self.after_running_batch()
 
 
-    def train_step(self, batch) -> tuple[any, argparse.Namespace]:
+    def train_step(self, batch) -> tuple[dict, dict or None]:
         """
         Must Returns:
             Loss in the model_output
@@ -125,8 +125,11 @@ class Runner(RunnerBase):
         self.model.train()
         model_output = self.model(**batch)
         metric_val = None
+        # Note: train_size要求train_data_loader的dataset支持len方法
+        # 此时不兼容IterableDataset
         if self.train_evaluator:
-            metric_val = self.train_evaluator.process(model_output, batch)
+            self.train_evaluator.process(model_output, batch)
+            metric_val = self.train_evaluator.evaluate(self.train_size)
 
         return model_output, metric_val
 
@@ -159,7 +162,7 @@ class Runner(RunnerBase):
                 else None
 
     @torch.no_grad()
-    def valid(self):
+    def valid(self) -> dict or None:
         """for dynamic cover, this func is Not merged with test"""
         if self.valid_data_loader is None:
             first_call_warning("valid", "未提供valid_data_loader，跳过valid")
@@ -183,22 +186,27 @@ class Runner(RunnerBase):
         for batch_i, data in enumerate(self.valid_data_loader):
             data = self._move_valid_data_to_device(data)
             model_output = self.valid_step(data)
+        self.model.train()
 
+
+        eval_result = None
         if self.valid_evaluator:
             eval_result = self.valid_evaluator.evaluate(self.valid_size)
             self.logger.info(f"Valid Summary: {eval_result}")
             self.wandb_log(eval_result)
-            self.model.train()
+
+        return eval_result
 
 
-    def valid_step(self, batch):
+    def valid_step(self, batch) -> dict:
         model_output = self.model(**batch)
-        self.valid_evaluator.process(model_output, batch)
+        self.valid_evaluator.process(model_output, batch) \
+                            if self.valid_evaluator else None
         return model_output
 
 
     @torch.no_grad()
-    def test(self):
+    def test(self) -> dict or None:
         if self.test_data_loader is None:
             first_call_warning("test", "未提供test_data_loader，跳过test")
             return
@@ -221,17 +229,22 @@ class Runner(RunnerBase):
         for batch_i, data in enumerate(self.test_data_loader):
             data = self._move_test_data_to_device(data)
             model_output = self.test_step(data)
+        self.model.train()
+
+        eval_result = None
 
         if self.test_evaluator:
             eval_result = self.test_evaluator.evaluate(self.test_size)
             self.logger.info(f"Test Summary: {eval_result}")
             self.wandb_log(eval_result)
-            self.model.train()
+
+        return eval_result
 
 
-    def test_step(self, batch):
+    def test_step(self, batch) -> dict:
         model_output = self.model(**batch)
-        self.test_evaluator.process(model_output, batch)
+        self.test_evaluator.process(model_output, batch) \
+                        if self.test_evaluator else None
         return model_output
 
 
@@ -274,6 +287,8 @@ class Runner(RunnerBase):
             run_name = registry.get("cfg.run_name")
         )
     def _assign_runtime_cfg(self):
+        if self.train_data_loader:
+            self.train_size = len(self.train_data_loader)
         if self.valid_data_loader:
             self.valid_size = len(self.valid_data_loader)
         if self.test_data_loader:
@@ -322,7 +337,7 @@ class Runner(RunnerBase):
             if self.optimizer is None:
                 self.optimizer = torch.optim.AdamW(
                     self.model.parameters(),
-                    lr = registry.get("lr"),
+                    lr = registry.get("cfg.optimizer.lr"),
                 )
             registry.register("start_msg", "使用torch.distributed启动中...")
 
