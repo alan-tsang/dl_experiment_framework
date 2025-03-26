@@ -12,31 +12,6 @@ import torch
 import yaml
 
 
-def makedirs(path, verbose = False):
-    os.makedirs(path, exist_ok = True)
-    if verbose:
-        print(f"创建文件夹： {path}")
-
-
-def cleanup_dir(dir):
-    """
-    Utility for deleting a directory. Useful for cleaning the storage space
-    that contains various training artifacts like checkpoints, data etc.
-    """
-    if os.path.exists(dir):
-        logging.info(f"Deleting directory: {dir}")
-        shutil.rmtree(dir)
-    logging.info(f"Deleted contents of directory: {dir}")
-
-
-def get_file_size(filename):
-    """
-    Given a file, get the size of file in MB
-    """
-    size_in_mb = os.path.getsize(filename) / float(1024 ** 2)
-    return size_in_mb
-
-
 def dump(data, filename, append_to_json = True, verbose = True):
     """
     Common i/o utility to handle saving data to various file formats.
@@ -137,3 +112,28 @@ def load(filename, mmap_mode = None, verbose = True, allow_pickle = False):
     else:
         raise Exception(f"Reading from {file_ext} is not supported yet")
     return data
+
+
+def makedirs(path, verbose = False):
+    os.makedirs(path, exist_ok = True)
+    if verbose:
+        print(f"创建文件夹： {path}")
+
+
+def cleanup_dir(dir):
+    """
+    Utility for deleting a directory. Useful for cleaning the storage space
+    that contains various training artifacts like checkpoints, data etc.
+    """
+    if os.path.exists(dir):
+        logging.info(f"Deleting directory: {dir}")
+        shutil.rmtree(dir)
+    logging.info(f"Deleted contents of directory: {dir}")
+
+
+def get_file_size(filename):
+    """
+    Given a file, get the size of file in MB
+    """
+    size_in_mb = os.path.getsize(filename) / float(1024 ** 2)
+    return size_in_mb

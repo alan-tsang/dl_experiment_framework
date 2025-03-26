@@ -7,6 +7,17 @@ import warnings
 
 _warning_cache = set()  # 全局缓存已触发警告的消息
 
+
+def better_dict_4_print(_dict):
+    import json
+    import omegaconf
+    from omegaconf import OmegaConf
+
+    if isinstance(_dict, omegaconf.dictconfig.DictConfig):
+        _dict = OmegaConf.to_container(_dict, resolve=True)
+    return json.dumps(_dict, indent=2)
+
+
 def set_proxy():
     pass
 
