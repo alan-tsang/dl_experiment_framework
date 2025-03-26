@@ -1,3 +1,4 @@
+import warnings
 from .base_callback import BaseCallBack
 from ..common.registry import registry
 
@@ -18,18 +19,18 @@ class EarlyStopCallBack(BaseCallBack):
 
     def __init__(
         self,
-        monitor: str = "loss",
-        delta: float = 0.0001,
-        patience: int = 3,
+        monitor: str = "accuracy",
+        delta: float = 0.005,
+        patience: int = 2,
         verbose: bool = True,
-        reverse: bool = False,
+        greater_is_better: bool = False,
     ):
         super(EarlyStopCallBack, self).__init__()
         self.monitor = monitor
         self.delta = delta
         self.patience = patience
         self.verbose = verbose
-        self.reverse = reverse
+        self.greater_is_better = greater_is_better
 
         self.wait = 0
         self.stopped_epoch = 0
@@ -37,20 +38,20 @@ class EarlyStopCallBack(BaseCallBack):
 
 
     def _is_better(self, current: float, best: float) -> bool:
-        if self.reverse:
-            return current < best - self.delta
-        else:
+        if self.greater_is_better:
             return current > best + self.delta
+        else:
+            return current < best - self.delta
 
 
     def after_running_epoch(self):
         """
         Check the monitored metric after each epoch and decide if training should stop.
         """
-        current_value = self.trainer.info.get(self.monitor, None)
+        current_value = registry.get(self.monitor)
 
         if current_value is None:
-            self.logger.warning(f"Warning: monitored metric '{self.monitor}' not found in trainer.info.")
+            warnings.warn(f"Warning: monitored metric '{self.monitor}' not found in metric.")
             return
 
         if self.best_value is None:
@@ -65,12 +66,11 @@ class EarlyStopCallBack(BaseCallBack):
 
             if self.wait >= self.patience:
                 self.stopped_epoch = registry.get("current_epoch")
-                self.trainer.info["should_stop"] = True
+                registry.register("stop_training", True)
                 if self.verbose:
                     self.logger.info(
                         f"触发提前停止训练. Best {self.monitor}: {self.best_value:.4f} at epoch {self.stopped_epoch - self.patience}."
                     )
-
 
 __all__ = [
     'EarlyStopCallBack'
