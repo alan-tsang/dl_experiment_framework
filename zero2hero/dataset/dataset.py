@@ -1,5 +1,6 @@
 import os
-from typing import Union, Optional, Callable, List, Dict
+import types
+from typing import Union, Optional, Callable, List, Dict, Any
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
 import warnings
 
@@ -12,8 +13,8 @@ class BaseMapDataset(BaseDataset):
     def __init__(
         self,
         data_source: Union[str, Dataset, DatasetDict],
-        process_fn: Optional[Callable[[Dict], Dict]] = None,
-        filter_fn: Optional[Callable[[Dict], bool]] = None,
+        process_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
+        filter_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
         metadata: Optional[Dict] = None,
         data_format: Optional[str] = None,
         split_ratios: Optional[tuple] = (0.8, 0.1, 0.1),
@@ -94,7 +95,7 @@ class BaseMapDataset(BaseDataset):
         self.dataset = DatasetDict(
             {
                 "train": train_temp["train"],
-                "val": val_test["train"],
+                "valid": val_test["train"],
                 "test": val_test["test"],
             }
         )
