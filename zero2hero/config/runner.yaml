@@ -6,44 +6,61 @@ run_description: "this is a demo run"
 # it depends on the project
 dataset:
   - type:
-    args:
+
   - type:
-    args:
 
 
 model:
-  - type:
-    args:
-  - type:
-    args:
+  type: NumericDecoder
+  num_layers: 6
+  d: 768
+  n: 12
+  max_len: 512
+  d_ff: 3072
+  dropout: 0.1
+  n_quantiles: 500
+  use_rope: true
+  use_embed: true
+  num_beams: 2
+
 
 metric:
   - type:
-    args:
+
   - type:
-    args:
+
 
 # below list all the config of runner with the default value
 # you can change it if you want
 optimizer:
   lr: 3e-4
+  weight_decay: 0.01
 scheduler:
   type: "LinearWarmupCosineLRScheduler"
-  min_lr: 1e-5
-  init_lr: 3e-4
-  warmup_steps: 0
-  warmup_start_lr: -1
+  min_lr: 3e-5
+  max_lr: 3e-4
+  warmup_rate: 0.1
+  warmup_start_lr: 1e-5
 training:
   epochs: 10
+  batch_size: 96
+  gradient_accumulation: 2
+  # grad_clip: 1.0
   print_model: true
   fp16: false
   progress_show:
     loss: false
-    test_acc: true
+    loss_lm: false
+    loss_reg: false
+    accuracy: true
+
+  #    MSE: false
+#    MAE: false
+#    R2: true
   valid_every_n_epochs: 1
   test_every_n_epochs: 1
   progress_every_n_epochs: 1
-  progress_every_n_batches: 1
+  progress_every_n_batches: 2
   ds_config: null
 
 log:
@@ -59,9 +76,9 @@ pt:
     loss: false
   pt_topk: 3
 wandb:
-  wandb_enable: false
-  wandb_project_name: "default"
-  wandb_offline: false
+  wandb_enable: true
+  wandb_project_name: "N_transformer"
+  wandb_offline: true
   wandb_dir: "./"
   wandb_tags: []
 
