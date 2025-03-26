@@ -18,9 +18,15 @@ March 11, 2025: support experiment dataset integration based on datasets
 + [x] tune hyperparameters
 + [x] early_stopping
 + [x] lr_scheduler
-+ [x] model_checkpoint
++ [x] grad clip
++ [x] grad accumulation
++ [x] fp16
++ [x] deepspeed
 + [x] progress_bar
 + [x] extendable callback
 + [x] epoch summary
 + [x] model summary
 + [x] model analysis: complexity, flop, activation
++ [x] distributed dump results
++ [x] map style datasets
++ [x] iter style datasets
