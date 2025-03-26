@@ -1,6 +1,7 @@
 import argparse
+import os
 import pickle
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, ABC
 from typing import Any, List, Optional, Sequence, Union
 
 from torch import Tensor
@@ -145,7 +146,7 @@ class BaseMetric(metaclass=ABCMeta):
 
 
 @registry.register_metric("DumpResults")
-class DumpResults(BaseMetric):
+class DumpResults(BaseMetric, ABC):
     """Dump model predictions to a pickle file for offline evaluation.
 
     Args:
@@ -170,57 +171,28 @@ class DumpResults(BaseMetric):
             raise ValueError('The output file must be a pkl file.')
         self.out_file_path = out_file_path
 
-    def process(self, data_batch: Any, predictions: argparse.Namespace) -> None:
-        """Transfer tensors in predictions to CPU."""
-        pred = predictions.logit.argmax(-1)
-        ground_truth = data_batch['y_shift']
-        self.results.extend((_to_cpu(pred), _to_cpu(ground_truth)))
+    @abstractmethod
+    def process(self, data_batch: Any, predictions: dict) -> None:
+        pass
+
 
 
     def compute_metrics(self, results: list) -> dict:
-        """Dump the prediction results to a pickle file."""
-        with open(self.out_file_path, 'wb') as f:
+        """Save results to a pickle file with epoch/batch in filename if available."""
+        base, ext = os.path.splitext(self.out_file_path)
+        os.makedirs(os.path.dirname(base), exist_ok=True)
+        suffix = []
+
+        if (current_epoch := registry.get("current_epoch")) is not None:
+            suffix.append(f'_epoch_{current_epoch + 1}')
+
+        out_file = f"{base}{''.join(suffix)}{ext}"
+
+        with open(out_file, 'wb') as f:
             pickle.dump(results, f)
-        print(
-            f'Results has been saved to {self.out_file_path}.')
+
+        print(f'Results saved to {out_file}.')
         return {}
-
-    @staticmethod
-    def filter_metric(metrics: argparse.Namespace, mode: str):
-        should_monitor = list(registry.get(f"cfg.training.{mode}_monitor").keys())
-        monitored = list(vars(metrics).keys())
-        if not all([m in monitored for m in should_monitor]):
-            first_call_warning(
-                f"filter_metric_{mode}",
-                f"{mode} 时期，compute_metric 返回的Namespace中缺少监控的keys;"
-                f"应该包含：{should_monitor}，实际包含：{monitored}"
-            )
-        filtered_metrics = argparse.Namespace()
-        for key, value in vars(metrics).items():
-            if key in should_monitor:
-                setattr(filtered_metrics, key, value)
-        return filtered_metrics
-
-    # 要求metric里的值支持sum
-    @staticmethod
-    def average_batch_metric(metrics: List[argparse.Namespace]) -> argparse.Namespace:
-        """
-        average metrics in different data loader' s batches
-        """
-        if not metrics:
-            return argparse.Namespace()
-        average_metric = argparse.Namespace()
-        for key in vars(metrics[0]).keys():
-            values = [getattr(metric, key) for metric in metrics]
-            average = sum(values) / len(values)
-            setattr(average_metric, key, average)
-        return average_metric
-
-
-    @staticmethod
-    def register_metrics_values(metrics: argparse.Namespace):
-        for key, value in vars(metrics).items():
-            registry.register(f"metric.{key}", value)
 
 
 
