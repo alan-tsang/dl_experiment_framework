@@ -1,5 +1,8 @@
+import types
+import warnings
 from typing import Union, Optional, Callable, List, Dict
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
+from fontTools.misc.iterTools import batched
 from torch.utils.data import DataLoader
 from abc import ABC, abstractmethod
 
@@ -63,7 +66,33 @@ class BaseDataset(ABC):
         )
 
     def _prepare_data(self):
-        self.dataset = self.dataset.map(self.process_fn).filter(self.filter_fn)
+        if isinstance(self.dataset, Dataset):
+            assert isinstance(self.process_fn, dict),\
+                ("process_fn is a dict, but dataset is a single dataset.\
+                  process_fn should be a function or None.")
+            assert isinstance(self.filter_fn, dict),\
+                ("filter_fn is a dict, but dataset is a single dataset.\
+                  filter_fn should be a function or None.")
+            self.dataset = (self.dataset.filter(self.filter_fn)\
+                            .map(self.process_fn, batched=True, batch_size = 1024, ))
+        elif isinstance(self.dataset, DatasetDict):
+            # 如果process_fn和filter_fn是函数，转换为字典
+            if isinstance(self.process_fn, types.FunctionType):
+                warnings.warn("process_fn is a function, but dataset is a DatasetDict.\
+                               process_fn will be applied to all splits.")
+                self.process_fn = {k: self.process_fn for k in self.dataset.keys()}
+            if isinstance(self.filter_fn, types.FunctionType):
+                self.filter_fn = {k: self.filter_fn for k in self.dataset.keys()}
+                warnings.warn("filter_fn is a function, but dataset is a DatasetDict. filter_fn will be applied to all splits.")
+            for split in self.dataset.keys():
+                assert split in self.process_fn,\
+                    (f"process_fn is missing {split} split.")
+                assert split in self.filter_fn,\
+                    (f"filter_fn is missing {split} split.")
+                self.dataset[split] = (self.dataset[split].filter(self.filter_fn[split])\
+                                       .map(self.process_fn[split], batched=True, batch_size = 1024))
+
+
 
     def save_to_disk(self, path: str):
         """保存到本地"""
