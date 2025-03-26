@@ -8,11 +8,9 @@
 
 ================
 """
-
 import argparse
 import contextlib
 
-import deepspeed
 import torch
 import torch.distributed as dist
 import wandb
@@ -27,9 +25,12 @@ from ..common.registry import registry
 from ..common.util import first_call_warning
 
 from ..dist.init import is_main_process, main_process
+from ..scheduler import LinearWarmupCosineLRScheduler
 
 
 class Runner(RunnerBase):
+    accumulation_count = 0
+
     def __init__(
             self,
             model: nn.Module,
@@ -100,6 +101,9 @@ class Runner(RunnerBase):
         is_fp16 = registry.get("cfg.training.fp16")
         scaler = GradScaler() if is_fp16 else None
 
+        # with torch.profiler.profile(
+        #         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
+        # ) as prof:
         for batch_i, data in enumerate(self.train_data_loader):
             registry.register("current_batch", batch_i)
             self.before_running_batch()
@@ -107,14 +111,17 @@ class Runner(RunnerBase):
             data = self._move_train_data_to_device(data)
             with self.maybe_autocast(is_fp16):
                 model_output, _ = self.train_step(data)
+
             assert "loss" in model_output, "模型输出必须返回包含loss的字典"
             self.backward(scaler, model_output["loss"])
-            registry.register("metric.loss", model_output["loss"])
+            registry.register("metric.loss", model_output["loss"].item())
+
             self.after_running_batch()
 
 
     def train_step(self, batch) -> tuple[dict, dict or None]:
         """
+
         Must Returns:
             Loss in the model_output
         """
@@ -125,13 +132,13 @@ class Runner(RunnerBase):
         self.model.train()
         model_output = self.model(**batch)
         metric_val = None
-        # Note: train_size要求train_data_loader的dataset支持len方法
-        # 此时不兼容IterableDataset
+
         if self.train_evaluator:
             self.train_evaluator.process(model_output, batch)
-            metric_val = self.train_evaluator.evaluate(self.train_size)
+            metric_val = self.train_evaluator.evaluate(len(model_output["loss"]))
 
         return model_output, metric_val
+
 
     @staticmethod
     def maybe_autocast(enabled: bool = False):
@@ -147,19 +154,45 @@ class Runner(RunnerBase):
             self.model.backward(loss)
             self.model.step()
         else:
-            self.optimizer.zero_grad()
+            accumulation_steps = registry.get("cfg.training.gradient_accumulation", 1)
+            max_norm = registry.get("cfg.training.grad_clip", None)
+
+            # 缩放损失以平均梯度
+            loss = loss / accumulation_steps
+
             if scaler:
                 scaler.scale(loss).backward()
-                scaler.step(self.optimizer)
-                scaler.update()
+                # 混合精度训练中，梯度缩放器维护的梯度状态可能与实际梯度不同步。
+                # 如果在多个反向传播调用后才执行unscale_()，可能导致梯度状态不一致。
+                scaler.unscale_(self.optimizer)
             else:
                 loss.backward()
-                self.optimizer.step()
-            current_epoch = registry.get("current_epoch")
-            current_step = registry.get("current_step")
 
-            self.scheduler.step(current_epoch, current_step) if self.scheduler \
-                else None
+            self.accumulation_count += 1
+            if self.accumulation_count % accumulation_steps == 0:
+                # 梯度裁剪
+                if max_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        max_norm=max_norm,
+                        norm_type=2
+                    )
+                # 梯度缩放
+                if scaler:
+                    scaler.step(self.optimizer)
+                    scaler.update()
+                else:
+                    self.optimizer.step()
+
+                current_step = registry.get("current_step")
+                if self.scheduler:
+                    self.scheduler.step(current_step)
+
+                self.optimizer.zero_grad()
+
+                # 重置计数器
+                self.accumulation_count = 0
+
 
     @torch.no_grad()
     def valid(self) -> dict or None:
@@ -242,7 +275,7 @@ class Runner(RunnerBase):
 
 
     def test_step(self, batch) -> dict:
-        model_output = self.model(**batch)
+        model_output = self.model.module.generate(**batch)
         self.test_evaluator.process(model_output, batch) \
                         if self.test_evaluator else None
         return model_output
@@ -293,10 +326,12 @@ class Runner(RunnerBase):
             self.valid_size = len(self.valid_data_loader)
         if self.test_data_loader:
             self.test_size = len(self.test_data_loader)
+        self.accumulation_count = 0
 
     def _apply_launch_strategy(self):
         model_info = get_model_info(self.model)
         registry.register("model_info", model_info)
+        print(self.runner_config)
 
         # 单卡也使用分布式环境
         if torch.cuda.is_available():
@@ -321,6 +356,12 @@ class Runner(RunnerBase):
         self.model = self.model.to(device)
         ds_config = registry.get("cfg.training.ds_config")
         if ds_config:
+            try:
+                import deepspeed
+            except ImportError:
+                raise ImportError("未安装deepspeed，无法使用deepspeed配置。"
+                                  "请运行以下命令安装：\n"
+                                  "pip install deepspeed")
             self.model, self.optimizer, _, _ = deepspeed.initialize(
                 model = self.model,
                 optimizer = self.optimizer if self.optimizer is not None else None,
@@ -337,7 +378,8 @@ class Runner(RunnerBase):
             if self.optimizer is None:
                 self.optimizer = torch.optim.AdamW(
                     self.model.parameters(),
-                    lr = registry.get("cfg.optimizer.lr"),
+                    lr = registry.get("cfg.optimizer.lr", 3e-4),
+                    weight_decay= registry.get("cfg.optimizer.weight_decay", 0.01),
                 )
             registry.register("start_msg", "使用torch.distributed启动中...")
 
@@ -423,5 +465,8 @@ class Runner(RunnerBase):
     def _move_valid_data_to_device(self, data):
         return self._move_train_data_to_device(data)
 
+    #NOTE: 为了简单，改了库文件，不做继承
     def _move_test_data_to_device(self, data):
         return self._move_train_data_to_device(data)
+
+
