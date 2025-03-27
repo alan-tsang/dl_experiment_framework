@@ -3,7 +3,11 @@ adapted from salesforce's lavis: https://github.com/salesforce/LAVIS/blob/main/l
 """
 import inspect
 import logging
+import re
+import warnings
+from typing import Dict, List
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -13,11 +17,6 @@ class BaseModel(nn.Module):
 
     def __init__(self):
         super().__init__()
-
-
-    @property
-    def device(self):
-        return list(self.parameters())[0].device
 
 
     def load_checkpoint(self, cached_path):
@@ -34,8 +33,8 @@ class BaseModel(nn.Module):
 
         msg = self.load_state_dict(state_dict, strict=False)
 
-        logging.info("Missing keys {}".format(msg.missing_keys))
         logging.info("load checkpoint from %s" % cached_path)
+        warnings.warn("Missing keys {}".format(msg.missing_keys))
 
         return msg
 
@@ -110,3 +109,91 @@ class BaseModel(nn.Module):
         model = model.to(device)
 
         return model
+
+
+    def freeze_parameters(self, freeze = True, regex = None):
+        """参数冻结控制
+        Args:
+            freeze (bool): 冻结/解冻
+            regex (str): 参数名正则匹配模式
+        Example:
+            >>> model.freeze_parameters(regex="^embeddings")
+        """
+
+        def _match(name):
+            return re.fullmatch(regex, name) if regex else True
+
+        for name, param in self.named_parameters():
+            if _match(name):
+                param.requires_grad = not freeze
+        return self
+
+
+    def visualize_architecture(self,
+                               input,
+                               save_path: str = "model_graph.png"):
+        """可视化模型计算图（需要安装torchviz）"""
+        from torchviz import make_dot
+
+        output = self(**input)
+        graph = make_dot(output, params = dict(self.named_parameters()))
+        graph.render(save_path, format = 'png', cleanup = True)
+        print(f"Graph saved to {save_path}")
+
+
+    def plot_parameter_histogram(self, param_name: str, bins: int = 50):
+        from matplotlib import pyplot as plt
+        """绘制参数分布直方图"""
+        param = dict(self.named_parameters())[param_name]
+        data = param.detach().cpu().numpy().flatten()
+
+        fig, ax = plt.subplots()
+        ax.hist(data, bins = bins, alpha = 0.7)
+        ax.set_title(f"Parameter Distribution: {param_name}")
+        ax.set_xlabel("Value")
+        ax.set_ylabel("Frequency")
+        return fig
+
+
+    def detect_parameter_outliers(self, sigma = 3) -> List[Dict]:
+        """检测参数异常值（基于3σ原则）"""
+        outliers = []
+        for name, param in self.named_parameters():
+            data = param.detach().cpu().numpy().flatten()
+            mean, std = np.mean(data), np.std(data)
+            threshold = sigma * std
+            outlier_indices = np.where(np.abs(data - mean) > threshold)[0]
+
+            if len(outlier_indices) > 0:
+                outliers.append(
+                    {
+                        "parameter": name,
+                        "total": len(data),
+                        "outliers": len(outlier_indices),
+                        "ratio": len(outlier_indices) / len(data),
+                        "max_val": np.max(data),
+                        "min_val": np.min(data)
+                    }
+                )
+        return outliers
+
+
+    @property
+    def device(self):
+        return list(self.parameters())[0].device
+
+    @property
+    def dtype(self):
+        """获取模型主参数的数据类型"""
+        return next(self.parameters()).dtype
+
+    @property
+    def num_parameters(self):
+        """获取模型参数数量"""
+        return sum(p.numel() for p in self.parameters())
+
+    @property
+    def num_trainable_parameters(self):
+        """获取可训练参数数量"""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
