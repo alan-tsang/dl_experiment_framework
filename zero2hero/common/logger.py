@@ -1,120 +1,138 @@
 import os
-from datetime import datetime
+import logging
+from typing import Optional
 
 import torch
 
+from ..dist import master_only
 from ..common.mixin import ManagerMixin
 from ..common.util import now
 
 
+class CustomFormatter(logging.Formatter):
+    """自定义 Formatter，支持动态控制换行符"""
+    def __init__(self, fmt: Optional[str] = None, datefmt: Optional[str] = None):
+        fmt = fmt or '[%(asctime)s] | [%(levelname)s] | [%(filename)s:%(lineno)d %(funcName)s] %(message)s'
+        super().__init__(fmt, datefmt)
+        self.terminator = ""  # 禁用默认换行符
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        return message + getattr(record, "end", "\n")
+
+
 class Logger(ManagerMixin):
-    _LOG_LEVEL_MAP = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
-    _LOG_LEVEL = _LOG_LEVEL_MAP["INFO"]
+    _LOG_LEVEL_MAP = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL,
+    }
 
-    def __init__(self, name = "logger", level = "INFO", to_file = False, folder = './logs', run_name = '', **kwargs):
+    def __init__(
+        self,
+        name: str = "logger",
+        level: str = "INFO",
+        to_file: bool = False,
+        folder: str = "./logs",
+        run_name: str = "",
+        **kwargs
+    ):
         super().__init__(name, **kwargs)
-        assert level in Logger._LOG_LEVEL_MAP, \
-            f"Invalid log level: {level}, valid levels: {Logger._LOG_LEVEL_MAP.keys()}"
         self.name = name
-        self.set_log_level(level)
+        self._logger = logging.getLogger(name)
+        self._logger.setLevel(self._LOG_LEVEL_MAP[level.upper()])
         self.to_file = to_file
-        self.folder = folder if to_file else None
-        self.run_name = run_name if to_file else None
-        self._file_handler = None
+        self.folder = folder
+        self.run_name = run_name
+        self._file_handler: Optional[logging.FileHandler] = None
+
+        # 配置处理器
+        self._configure_handlers()
+
+    def _configure_handlers(self) -> None:
+        """配置控制台和文件处理器"""
+        # 避免重复添加处理器
+        if not self._logger.handlers:
+            # 控制台处理器（始终添加，但仅在分布式 Rank 0 或非分布式环境生效）
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(CustomFormatter(datefmt="%Y-%m-%d %H:%M:%S"))
+            self._logger.addHandler(console_handler)
+
+        # 文件处理器（仅在 to_file=True 时添加）
         if self.to_file:
-            self._post_init()
+            self._add_file_handler()
 
-
-    def _post_init(self):
-        if not self.to_file:
-            return
+    def _add_file_handler(self) -> None:
+        """添加文件处理器"""
+        # 分布式环境下仅在 Rank 0 进程处理
         if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
             return
 
-        prefix = self.run_name + '_' if self.run_name else ''
-        self.run_name = prefix + now() + ".log"
-        self.file_path = os.path.join(self.folder, self.run_name)
-        os.makedirs(self.folder, exist_ok = True)
-        self._file_handler = open(self.file_path, "a")
-        self.info(f"日志管理器{self.name}已创建：{os.path.abspath(self.file_path)}")
+        # 创建日志目录
+        os.makedirs(self.folder, exist_ok=True)
 
+        # 生成文件名
+        prefix = f"{self.run_name}_" if self.run_name else ""
+        filename = f"{prefix}{now()}.log"
+        file_path = os.path.join(self.folder, filename)
 
-    @classmethod
-    def set_log_level(cls, level: str):
-        """设置全局日志等级"""
-        if level is None or level.strip() == "":
-            raise ValueError("Log level cannot be None or empty.")
-        level = level.upper()
-        if level in cls._LOG_LEVEL_MAP:
-            cls._GLOBAL_LOG_LEVEL = cls._LOG_LEVEL_MAP[level]
-        else:
-            raise ValueError(
-                f"Invalid log level: {level}. Valid levels: {list(cls._LOG_LEVEL_MAP.keys())}"
-            )
+        # 配置文件处理器
+        file_handler = logging.FileHandler(file_path)
+        file_handler.setFormatter(CustomFormatter(datefmt="%Y-%m-%d %H:%M:%S"))
+        # file_handler.addFilter(self._distributed_filter)
+        self._logger.addHandler(file_handler)
+        self._file_handler = file_handler
 
-    def close_file_handler(self):
+        # 记录日志文件路径
+        self._logger.info(f"日志管理器 {self.name} 已创建：{os.path.abspath(file_path)}")
+
+    # @staticmethod
+    # def _distributed_filter(record: logging.LogRecord) -> bool:
+    #     """分布式环境过滤器：仅在 Rank 0 进程记录日志"""
+    #     if torch.distributed.is_initialized():
+    #         return torch.distributed.get_rank() == 0
+    #     return True
+
+    def close_file_handler(self) -> None:
+        """关闭文件处理器"""
         if self._file_handler:
-            self.info(f"日志文件已保存：{self.file_path}")
+            self._logger.removeHandler(self._file_handler)
             self._file_handler.close()
+            self._file_handler = None
 
+    def log(
+        self,
+        text: str,
+        level: str = "INFO",
+        end: str = "\n",
+    ) -> None:
+        log_level = self._LOG_LEVEL_MAP.get(level.upper(), logging.INFO)
+        if self._logger.isEnabledFor(log_level):
+            self._logger.log(log_level, text, extra={"end": end}, stacklevel=3)
 
-    def log_print(self, text, level = "INFO", end = "\n", timestamp = True, to_file = None):
-        if torch.distributed.is_initialized():
-            if torch.distributed.get_rank() != 0:
-                return
+    # 简化日志方法（直接委托给 log_print）
+    def debug(self, obj: any, end: str = "\n") -> None:
+        self.log(str(obj), "DEBUG", end)
 
-        assert level in Logger._LOG_LEVEL_MAP, \
-            f"Invalid log level: {level}, valid levels: {Logger._LOG_LEVEL_MAP.keys()}"
+    def info(self, obj: any, end: str = "\n") -> None:
+        self.log(str(obj), "INFO", end)
 
-        current_level = Logger._LOG_LEVEL_MAP.get(level.upper(), level)
+    def warning(self, obj: any, end: str = "\n") -> None:
+        self.log(str(obj), "WARNING", end)
 
-        if current_level < Logger._GLOBAL_LOG_LEVEL:
-            return
+    def error(self, obj: any, end: str = "\n") -> None:
+        self.log(str(obj), "ERROR", end)
 
-        if to_file is None:
-            to_file = self.to_file
+    def critical(self, obj: any, end: str = "\n") -> None:
+        self.log(str(obj), "CRITICAL", end)
 
-        if timestamp:
-            timestamp_str = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            prefix = f"[{timestamp_str}] [{level.upper()}]" if level else f"[{timestamp_str}]"
-        else:
-            prefix = f"[{level.upper()}]" if level else ""
-
-        log_message = f"{prefix} {text}" if prefix else text
-
-        print(log_message, end = end, flush = True)
-
+    @master_only
+    def just_print(self, obj: any, end: str = "\n", time_stamp = False, to_file: Optional[bool] = None) -> None:
+        if time_stamp:
+            obj = f"[{now()}] {obj}"
+        print(obj, end=end, flush=True)
         if to_file and self._file_handler:
-            self._file_handler.write(f"{log_message}{end}")
+            self._file_handler.stream.write(f"{obj}{end}")
 
-        return
-
-    # Note: for 分布式打印，但是已过期，通过dist.dist的重定向built_in_print实现
-    def just_print(self, obj: any, end = "\n", to_file = None):
-        if torch.distributed.is_initialized():
-            if torch.distributed.get_rank() != 0:
-                return
-
-        if to_file is None:
-            to_file = self.to_file
-
-        print(obj, end = end, flush = True)
-
-        if to_file and self._file_handler:
-            self._file_handler.write(f"{obj}{end}")
-
-
-    def debug(self, obj: any, end = "\n", timestamp = True):
-        return self.log_print(obj, level = "DEBUG", end = end, timestamp = timestamp)
-
-    def info(self, obj: any, end = "\n", timestamp = True):
-        return self.log_print(obj, level = "INFO", end = end, timestamp = timestamp)
-
-    def warning(self, obj: any, end = "\n", timestamp = True):
-        return self.log_print(obj, level = "WARNING", end = end, timestamp = timestamp)
-
-    def error(self, obj: any, end = "\n", timestamp = True):
-        return self.log_print(obj, level = "ERROR", end = end, timestamp = timestamp)
-
-    def critical(self, obj: any, end = "\n", timestamp = True):
-        return self.log_print(obj, level = "CRITICAL", end = end, timestamp = timestamp)
