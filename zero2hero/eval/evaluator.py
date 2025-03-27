@@ -90,47 +90,47 @@ class Evaluator:
         return metrics
 
 
-    def offline_evaluate(self,
-                         data_samples: Sequence,
-                         data: Optional[Sequence] = None,
-                         chunk_size: int = 1):
-        """Offline evaluate the dumped predictions on the given data .
-
-        Args:
-            data_samples (Sequence): All predictions and ground truth of the
-                model and the validation set.
-            data (Sequence, optional): All data of the validation set.
-            chunk_size (int): The number of data samples and predictions to be
-                processed in a batch.
-        """
-
-        # support chunking iterable objects
-        def get_chunks(seq: Iterator, chunk_size=1):
-            stop = False
-            while not stop:
-                chunk = []
-                for _ in range(chunk_size):
-                    try:
-                        chunk.append(next(seq))
-                    except StopIteration:
-                        stop = True
-                        break
-                if chunk:
-                    yield chunk
-
-        if data is not None:
-            assert len(data_samples) == len(data), (
-                'data_samples and data should have the same length, but got '
-                f'data_samples length: {len(data_samples)} '
-                f'data length: {len(data)}')
-            data = get_chunks(iter(data), chunk_size)
-
-        size = 0
-        for output_chunk in get_chunks(iter(data_samples), chunk_size):
-            if data is not None:
-                data_chunk = pseudo_collate(next(data))  # type: ignore
-            else:
-                data_chunk = None
-            size += len(output_chunk)
-            self.process(output_chunk, data_chunk)
-        return self.evaluate(size)
+    # def offline_evaluate(self,
+    #                      data_samples: Sequence,
+    #                      data: Optional[Sequence] = None,
+    #                      chunk_size: int = 1):
+    #     """Offline evaluate the dumped predictions on the given data .
+    #
+    #     Args:
+    #         data_samples (Sequence): All predictions and ground truth of the
+    #             model and the validation set.
+    #         data (Sequence, optional): All data of the validation set.
+    #         chunk_size (int): The number of data samples and predictions to be
+    #             processed in a batch.
+    #     """
+    #
+    #     # support chunking iterable objects
+    #     def get_chunks(seq: Iterator, chunk_size=1):
+    #         stop = False
+    #         while not stop:
+    #             chunk = []
+    #             for _ in range(chunk_size):
+    #                 try:
+    #                     chunk.append(next(seq))
+    #                 except StopIteration:
+    #                     stop = True
+    #                     break
+    #             if chunk:
+    #                 yield chunk
+    #
+    #     if data is not None:
+    #         assert len(data_samples) == len(data), (
+    #             'data_samples and data should have the same length, but got '
+    #             f'data_samples length: {len(data_samples)} '
+    #             f'data length: {len(data)}')
+    #         data = get_chunks(iter(data), chunk_size)
+    #
+    #     size = 0
+    #     for output_chunk in get_chunks(iter(data_samples), chunk_size):
+    #         if data is not None:
+    #             data_chunk = pseudo_collate(next(data))  # type: ignore
+    #         else:
+    #             data_chunk = None
+    #         size += len(output_chunk)
+    #         self.process(output_chunk, data_chunk)
+    #     return self.evaluate(size)
