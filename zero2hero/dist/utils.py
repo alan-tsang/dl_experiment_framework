@@ -36,7 +36,7 @@ def get_local_group() -> Optional[ProcessGroup]:
 def get_default_group() -> Optional[ProcessGroup]:
     """Return default process group."""
 
-    return torch_dist.distributed._get_default_group()
+    return torch_dist.distributed_c10d._get_default_group()
 
 
 def infer_launcher():
