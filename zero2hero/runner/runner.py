@@ -10,15 +10,19 @@
 """
 import argparse
 import contextlib
+from typing import List, Optional, Union
 
 import torch
 import torch.distributed as dist
 import wandb
+from omegaconf import omegaconf
 from torch import nn
 from torch.cuda.amp import GradScaler
 
 from .runner_base import RunnerBase
+from .. import BaseModel, Evaluator
 from ..callback import (CheckpointCallback, EpochSummaryCallBack, ProcessCallBack, WandbCallback)
+from ..callback.base_callback import BaseCallBack
 from ..common.dl_util import get_batch_n, get_model_info
 from ..common.logger import Logger
 from ..common.registry import registry
@@ -33,17 +37,17 @@ class Runner(RunnerBase):
 
     def __init__(
             self,
-            model: nn.Module,
-            train_data_loader,
-            valid_data_loader,
-            test_data_loader,
-            train_evaluator = None,
-            valid_evaluator = None,
-            test_evaluator = None,
-            epochs = None,
-            optimizer = None,
-            callbacks = None,
-            runner_config: dict = None,
+            model: BaseModel,
+            train_data_loader: torch.utils.data.DataLoader,
+            valid_data_loader: torch.utils.data.DataLoader,
+            test_data_loader: torch.utils.data.DataLoader,
+            train_evaluator: Evaluator = None,
+            valid_evaluator: Evaluator = None,
+            test_evaluator: Evaluator = None,
+            epochs: int = None,
+            optimizer: Optional[torch.optim.Optimizer] = None,
+            callbacks: List[BaseCallBack] = None,
+            runner_config: Union[dict, omegaconf.DictConfig] = None,
             *args,
             **kwargs,
     ):
@@ -111,6 +115,8 @@ class Runner(RunnerBase):
             data = self._move_train_data_to_device(data)
             with self.maybe_autocast(is_fp16):
                 model_output, _ = self.train_step(data)
+                # self.model.module.visualize_architecture(model_output["logit"].mean(), '1')
+                # break
 
             assert "loss" in model_output, "模型输出必须返回包含loss的字典"
             self.backward(scaler, model_output["loss"])
@@ -131,6 +137,7 @@ class Runner(RunnerBase):
             registry.register("current_step", registry.get("current_step") + 1)
         self.model.train()
         model_output = self.model(**batch)
+
         metric_val = None
 
         if self.train_evaluator:
