@@ -22,6 +22,7 @@ setup(
         "fonttools"
     ],
     extras_require = {
+        "transformers": ["transformers"],
         "deep_speed": ["deepspeed"],
         "torch_geometric": ["torch_geometric"],
         "torch_scatter": ["torch_scatter"],
