@@ -16,6 +16,8 @@ Optional packages:
 + [x] deepspeed
 + [x] wandb
 + [x] transformers
++ [x] torch_scatter
++ [x] torch_geometric
 
 
 ## Feature
@@ -31,14 +33,14 @@ For Experiment(炼丹):
 
 
 For Training Trick:
-+ [x] early_stopping
-+ [x] warmup lr scheduler
-+ [x] grad clip
++ [x] deepspeed support
++ [x] fp16 support
 + [x] grad accumulation
-+ [x] fp16
-+ [x] deepspeed
++ [x] grad clip
++ [x] early_stopping
 + [x] progress bar like pylightning
-+ [x] extendable callback
++ [x] warmup lr scheduler
 + [x] builtin epoch summary, model summary
 + [x] model analysis: complexity, flop, activation
++ [x] extendable callback
 
