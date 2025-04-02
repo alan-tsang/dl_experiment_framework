@@ -8,15 +8,14 @@
 
 ================
 """
-import argparse
 import contextlib
+import warnings
 from typing import List, Optional, Union
 
 import torch
 import torch.distributed as dist
 import wandb
 from omegaconf import omegaconf
-from torch import nn
 from torch.cuda.amp import GradScaler
 
 from .runner_base import RunnerBase
@@ -457,7 +456,8 @@ class Runner(RunnerBase):
         callbacks.extend(self.callbacks)
         self._register_callbacks(callbacks)
 
-    def _move_train_data_to_device(self, data):
+    @staticmethod
+    def _move_train_data_to_device(data):
         device = registry.get("device")
         if isinstance(data, (list, tuple)):
             return [d.to(device) for d in data]
@@ -466,14 +466,19 @@ class Runner(RunnerBase):
         elif isinstance(data, torch.Tensor):
             return data.to(device)
         else:
-            self.logger.warning(f"未知数据类型：{type(data)}")
+            warnings.warning(f"move data to device {device} failed, data type: {type(data)}; default return raw data!")
             return data
 
     def _move_valid_data_to_device(self, data):
+        """
+        maybe should be overridden
+        """
         return self._move_train_data_to_device(data)
 
-    #NOTE: 为了简单，改了库文件，不做继承
     def _move_test_data_to_device(self, data):
+        """
+        maybe should be overridden
+        """
         return self._move_train_data_to_device(data)
 
 
