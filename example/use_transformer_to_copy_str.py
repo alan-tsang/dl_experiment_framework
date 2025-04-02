@@ -1,6 +1,3 @@
-import argparse
-import copy
-from argparse import Namespace
 from typing import Any, Sequence
 
 import torch
@@ -22,7 +19,7 @@ class CustomDataset(Dataset):
 
 
     def __len__(self):
-        # data_loader 根据这个返回值来决定每个epoch的迭代次数
+        # data_loader 根据__len__这个返回值来决定每个epoch的迭代次数
         return self.data_n
 
 
@@ -91,18 +88,22 @@ class DemoNet(BaseModel):
         out_prob = self.transformer(x, y_input, x_mask = x_mask, y_mask = y_mask)
         logit = self.logit_generator(out_prob)
         loss = self.criterion(logit.view(-1, logit.size(-1)), y_shift.view(-1))
-        return Namespace(
+        return dict(
             logit = logit,
             loss = loss
         )
 
+    def generate(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
+
+
 class MyMetric(BaseMetric):
-    def __init__(self, collect_device = 'cpu', prefix = 'demo_metric', collect_dir = './tmp' ):
-        super(MyMetric, self).__init__(collect_device, prefix, collect_dir)
+    def __init__(self, collect_device = 'cpu', collect_dir = './tmp' ):
+        super(MyMetric, self).__init__(collect_device, collect_dir = collect_dir)
         self.dataset_meta = 'bench_demo'
 
     def process(self, data_batch: Any, data_samples: Sequence[dict]) -> None:
-        pred = data_samples.logit.argmax(dim = -1)
+        pred = data_samples["logit"].argmax(dim = -1)
         y_shift = data_batch['y_shift']
         self.results.append([pred, y_shift])
 
@@ -119,18 +120,15 @@ class MyMetric(BaseMetric):
         return dict(valid_acc = acc)
 
 
-
-
 class MyMetric2(BaseMetric):
-    def __init__(self, collect_device = 'cpu', prefix = 'demo_metric', collect_dir = './tmp' ):
-        super(MyMetric2, self).__init__(collect_device, prefix, collect_dir)
+    def __init__(self, collect_device = 'cpu', collect_dir = './tmp' ):
+        super(MyMetric2, self).__init__(collect_device, collect_dir = collect_dir)
         self.dataset_meta = 'bench_demo'
 
     def process(self, data_batch: Any, data_samples: Sequence[dict]) -> None:
-        pred = data_samples.logit.argmax(dim = -1)
+        pred = data_samples["logit"].argmax(dim = -1)
         y_shift = data_batch['y_shift']
         self.results.append([pred, y_shift])
-
 
     def compute_metrics(self, results) -> dict:
         acc = []
@@ -142,6 +140,19 @@ class MyMetric2(BaseMetric):
         acc = (sum(acc) / len(acc)).item()
 
         return dict(test_acc = acc)
+
+
+class DumpRunResult(DumpResults):
+
+    def process(self, data_batch: Any, predictions: dict) -> None:
+        logit = predictions['logit'].cpu().numpy()
+        label = data_batch['y_shift'].cpu().numpy()
+        classify_probs = logit.argmax(axis = -1)
+        self.results.append({
+            'logit': logit,
+            'label': label,
+            'classify_probs': classify_probs
+        })
 
 
 if __name__ == '__main__':
@@ -165,9 +176,9 @@ if __name__ == '__main__':
     net = DemoNet(model, logit_generator)
     # net.load_checkpoint('example/transformer_to_copy_str.pth')
 
-    optimizer = torch.optim.AdamW(net.parameters(), lr = cfg.optimizer.lr)
-    evaluator = Evaluator([MyMetric(), DumpResults('./example/genarated.pkl')])
-    evaluator_test = Evaluator([MyMetric2(), DumpResults('./example/genarated.pkl')])
+    # optimizer = torch.optim.AdamW(net.parameters(), lr = cfg.optimizer.lr)
+    evaluator = Evaluator([MyMetric(), DumpRunResult('./example/generated.pkl')])
+    evaluator_test = Evaluator([MyMetric2(), DumpRunResult('./example/generated.pkl')])
 
     runner = Runner(
         train_data_loader = bench_loader,
@@ -175,10 +186,10 @@ if __name__ == '__main__':
         test_data_loader = bench_loader,
         model = net,
         epochs = cfg.training.epochs,
-        optimizer = optimizer,
+        # optimizer = optimizer,
         runner_config = cfg,
         valid_evaluator = evaluator,
         test_evaluator = evaluator_test
     )
-    # runner.fit()
-    runner.test()
+    runner.fit()
+    # runner.test()
