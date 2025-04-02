@@ -1,12 +1,16 @@
 """
+A runner for training, validation and testing.
 
-================
-@Author: zhicun Zeng / Alan
-@Date: 2023/11/10 11:38
-@Data: 2025/02/02 22:00
-@Data: 2025/02/28 01:00
+maybe should be overridden in diff proj:
+1. _move_train_data_to_device, _move_valid_data_to_device, _move_test_data_to_device
+2. valid_step, test_step
 
-================
+don't recommend to override, unless you know what you are doing:
+1. train_step
+2. _apply_launch_strategy
+
+try to use your own callbacks, then you can do something in different lifecycle of runner
+
 """
 import contextlib
 import warnings
@@ -14,7 +18,6 @@ from typing import List, Optional, Union
 
 import torch
 import torch.distributed as dist
-import wandb
 from omegaconf import omegaconf
 from torch.cuda.amp import GradScaler
 
@@ -60,8 +63,8 @@ class Runner(RunnerBase):
         self.valid_evaluator = valid_evaluator
         self.test_evaluator = test_evaluator
 
-        # NOTE: 启用deepspeed时，optimizer可以为空
         self.epochs = epochs
+        # NOTE: 启用deepspeed时，optimizer可以为空
         self.optimizer = optimizer
 
         self.callbacks = callbacks if callbacks is not None else []
@@ -196,7 +199,6 @@ class Runner(RunnerBase):
 
                 self.optimizer.zero_grad()
 
-                # 重置计数器
                 self.accumulation_count = 0
 
 
@@ -305,9 +307,15 @@ class Runner(RunnerBase):
 
     @main_process
     def wandb_log(self, log_dict):
-        if registry.get("cfg.wandb.wandb_enable") and wandb.run is not None:
-            wandb.log(log_dict)
-            self.logger.info(f"wandb记录：{log_dict}")
+        if registry.get("cfg.wandb.wandb_enable"):
+            try:
+                import wandb
+            except ImportError:
+                first_call_warning("wandb", "未安装wandb，无法使用wandb callback.")
+            else:
+                if wandb.run is not None:
+                    wandb.log(log_dict)
+                    self.logger.info(f"wandb记录：{log_dict}")
 
 
     @staticmethod
@@ -441,9 +449,17 @@ class Runner(RunnerBase):
             epochs = self.epochs,
             batchs = int(get_batch_n(self.train_data_loader)),
         )
+        wandb_callback = None
+        if registry.get("cfg.wandb.wandb_enable"):
+            try:
+                import wandb
+            except ImportError:
+                raise ImportError("未安装wandb，无法使用wandb callback。"
+                                  "请运行以下命令安装：\n"
+                                  "pip install wandb")
+            else:
+                wandb_callback = WandbCallback()
 
-        wandb_callback = WandbCallback() if registry.get("cfg.wandb.wandb_enable")\
-                                        else None
         checkpoint_callback = CheckpointCallback(model = self.model) \
                                 if registry.get("cfg.pt.pt_save") else None
 
@@ -480,5 +496,3 @@ class Runner(RunnerBase):
         maybe should be overridden
         """
         return self._move_train_data_to_device(data)
-
-
