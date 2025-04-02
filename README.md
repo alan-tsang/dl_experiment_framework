@@ -1,35 +1,44 @@
-# zero2hero
-personal deeplearning experient framework
+# Zero2Hero
+personal deeplearning experiment framework for pytorch
 
-## news
-March 11, 2025: support experiment dataset integration based on datasets
-April 01, 2025: support base model based on nn.Module, PretrainedModel, and PretrainedModelConfig
-April 02, 2025: support evaluator offline and online
+## News
++ April 02, 2025: support evaluator offline and online
++ April 01, 2025: support base model based on nn.Module, PretrainedModel, and PretrainedModelConfig
++ March 11, 2025: support experiment dataset integration based on datasets
 
-## environment
+## Environment
+Need to install the following packages:
 + [x] pytorch
-+ [x] wandb
-+ [x] omegaconf
-+ [x] deepspeed
 + [x] datasets
++ [x] omegaconf
 
-## support
-+ [x] multi experiment
+Optional packages:
++ [x] deepspeed
++ [x] wandb
++ [x] transformers
+
+
+## Feature
+For Experiment(炼丹):
++ [x] multi experiment support based on omegaconf and wandb sweep
++ [x] multi monitor value for training, validation, and test
++ [x] dataset integration based on datasets, including map style and iter style
++ [x] different base model based on nn.Module, PretrainedModel, and PretrainedModelConfig
 + [x] Independent training, verification, testing
-+ [x] monitor for training, validation, and test
-+ [x] tune hyperparameters
++ [x] tune hyperparameters based on wandb sweep
++ [x] evaluator offline and online
++ [x] distributed collect and dump results
+
+
+For Training Trick:
 + [x] early_stopping
-+ [x] lr_scheduler
++ [x] warmup lr scheduler
 + [x] grad clip
 + [x] grad accumulation
 + [x] fp16
 + [x] deepspeed
-+ [x] progress_bar
++ [x] progress bar like pylightning
 + [x] extendable callback
-+ [x] epoch summary
-+ [x] model summary
++ [x] builtin epoch summary, model summary
 + [x] model analysis: complexity, flop, activation
-+ [x] distributed dump results
-+ [x] map style datasets
-+ [x] iter style datasets
-+ [x] transformers model
+
