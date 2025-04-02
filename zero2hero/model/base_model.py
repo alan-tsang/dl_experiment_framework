@@ -184,16 +184,13 @@ class BaseModel(nn.Module):
 
     @property
     def dtype(self):
-        """获取模型主参数的数据类型"""
         return next(self.parameters()).dtype
 
     @property
     def num_parameters(self):
-        """获取模型参数数量"""
         return sum(p.numel() for p in self.parameters())
 
     @property
     def num_trainable_parameters(self):
-        """获取可训练参数数量"""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 

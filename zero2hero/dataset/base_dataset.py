@@ -1,3 +1,7 @@
+"""
+BaseDataset: based on HuggingFace Datasets, with some additional features.
+"""
+
 import types
 import warnings
 from typing import Union, Optional, Callable, List, Dict
@@ -91,7 +95,6 @@ class BaseDataset(ABC):
                     (f"filter_fn is missing {split} split.")
                 self.dataset[split] = (self.dataset[split].filter(self.filter_fn[split])\
                                        .map(self.process_fn[split], batched=True, batch_size = 1024))
-
 
 
     def save_to_disk(self, path: str):
