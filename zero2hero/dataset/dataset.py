@@ -15,6 +15,9 @@ class BaseMapDataset(BaseDataset):
         data_source: Union[str, Dataset, DatasetDict],
         process_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
         filter_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
+        process_first: bool = True,
+        process_bs: int = 1,
+        filter_bs: int = 1,
         metadata: Optional[Dict] = None,
         data_format: Optional[str] = None,
         split_ratios: Optional[tuple] = (0.8, 0.1, 0.1),
@@ -25,6 +28,9 @@ class BaseMapDataset(BaseDataset):
             data_source,
             process_fn,
             filter_fn,
+            process_first,
+            process_bs,
+            filter_bs,
             metadata,
             data_format
         )
@@ -106,14 +112,16 @@ class BaseMapDataset(BaseDataset):
         if isinstance(self.dataset, DatasetDict):
             return BaseMapDataset(
                 data_source = self.dataset[split].select(indices),
-                process_fn = self.process_fn,
-                filter_fn = self.filter_fn,
+                process_fn = None,
+                filter_fn = None,
+                split_ratios = None,
                 metadata = self.metadata
             )
         return BaseMapDataset(
             data_source = self.dataset.select(indices),
-            process_fn = self.process_fn,
-            filter_fn = self.filter_fn,
+            process_fn = None,
+            filter_fn = None,
+            split_ratios = None,
             metadata = self.metadata
         )
 
@@ -147,8 +155,11 @@ class BaseIterableDataset(BaseDataset):
     def __init__(
         self,
         data_source: Union[str, Dataset, DatasetDict],
-        process_fn: Optional[Callable[[Dict], Dict]] = None,
-        filter_fn: Optional[Callable[[Dict], bool]] = None,
+        process_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
+        filter_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
+        process_first: bool = True,
+        process_bs: int = 1,
+        filter_bs: int = 1,
         metadata: Optional[Dict] = None,
         data_format: Optional[str] = None,
         *args,
@@ -158,6 +169,9 @@ class BaseIterableDataset(BaseDataset):
             data_source,
             process_fn,
             filter_fn,
+            process_first,
+            process_bs,
+            filter_bs,
             metadata,
         )
         self._set_dataset(data_source, data_format)
