@@ -3,6 +3,8 @@ personal deeplearning experient framework
 
 ## news
 March 11, 2025: support experiment dataset integration based on datasets
+April 01, 2025: support base model based on nn.Module, PretrainedModel, and PretrainedModelConfig
+April 02, 2025: support evaluator offline and online
 
 ## environment
 + [x] pytorch
@@ -30,3 +32,4 @@ March 11, 2025: support experiment dataset integration based on datasets
 + [x] distributed dump results
 + [x] map style datasets
 + [x] iter style datasets
++ [x] transformers model
