@@ -10,21 +10,21 @@ setup(
     author_email='leibzc@163.com',
     description='personal deep learning experiment framework for pytorch',
     install_requires=[
-        "torch",
+        "torch>=1.11.0",
         "datasets",
         "omegaconf",
-        "nvidia_ml_py",
-        "scikit_learn",
-        "pynvml",
         "numpy",
-        "rich",
-        "fonttools"
+        "pandas",
+        "pyyaml"
     ],
     extras_require = {
-        "wandb": ["wandb"],
-        "transformers": ["transformers"],
+        "rich": ["rich"], # for show model info more beautiful in analysis.*.py
+        "rdkit": ["rdkit"], # for common.dl_util.py
+        "wandb": ["wandb"], # for callback.wandb.py
+        "transformers": ["transformers"], # for model.base_pretrained_model.py
         "deepspeed": ["deepspeed"],
-        "torch_geometric": ["torch_geometric"],
-        "torch_scatter": ["torch_scatter"],
+        "torch_geometric": ["torch_geometric"],# for model.gnn.py
+        "torch_scatter": ["torch_scatter"],# for model.gnn.py
+        "other": ["matplotlib", "torchviz", "graphviz", "pynvml"]
     },
 )
