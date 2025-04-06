@@ -1,6 +1,5 @@
+import warnings
 import torch
-from pynvml import *
-from sklearn.model_selection import KFold
 from torch.utils.data import Dataset, Subset
 
 
@@ -17,20 +16,30 @@ def kfold(dataset: Dataset, k: int, shuffle: bool = True, random_state: int = 42
     返回:
     list: 包含 k 个元组的列表，每个元组为 (训练数据集, 验证数据集)。
     """
-    kf = KFold(n_splits=k, shuffle=shuffle, random_state=random_state)
-    folds = []
-    for train_index, val_index in kf.split(range(len(dataset))):
-        train_dataset = Subset(dataset, train_index)
-        val_dataset = Subset(dataset, val_index)
-        folds.append((train_dataset, val_dataset))
-    return folds
+    try:
+        from sklearn.model_selection import KFold
+    except ImportError:
+        warnings.warn("请安装 sklearn 库以使用 KFold 功能。可以使用 'pip install scikit-learn' 命令安装。")
+    else:
+        kf = KFold(n_splits=k, shuffle=shuffle, random_state=random_state)
+        folds = []
+        for train_index, val_index in kf.split(range(len(dataset))):
+            train_dataset = Subset(dataset, train_index)
+            val_dataset = Subset(dataset, val_index)
+            folds.append((train_dataset, val_dataset))
+        return folds
 
 
 def get_gpu_usage():
-    nvmlInit()
-    handle = nvmlDeviceGetHandleByIndex(0)
-    info = nvmlDeviceGetMemoryInfo(handle)
-    return f"GPU显存使用情况: {info.used//1024**3} GB"
+    try:
+        from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
+    except ImportError:
+         warnings.warn("pynvml库未安装，获取GPU显存功能不可用。使用pip install nvidia-ml-py3安装。")
+    else:
+        nvmlInit()
+        handle = nvmlDeviceGetHandleByIndex(0)
+        info = nvmlDeviceGetMemoryInfo(handle)
+        return f"GPU显存使用情况: {info.used//1024**3} GB"
 
 
 def get_model_info(model):
@@ -44,6 +53,7 @@ def get_model_info(model):
         str: 格式化模型信息
     """
     # 解包DDP/DeepSpeed模型
+    assert isinstance(model, torch.nn.Module), "model must be a torch.nn.Module"
     original_model = model
     while hasattr(original_model, 'module'):
         original_model = original_model.module

@@ -3,6 +3,7 @@ import rdkit
 from rdkit import Chem
 from rdkit.Chem import Draw
 
+
 def generate_mol_img(mol, save = '', size = (400, 300)):
     # SMILES
     if isinstance(mol, str):
