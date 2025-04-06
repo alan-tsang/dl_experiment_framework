@@ -3,12 +3,7 @@ from typing import Any, Sequence
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from zero2hero.eval.base_metric import BaseMetric, DumpResults
-from zero2hero.eval.evaluator import Evaluator
-from zero2hero.model import BaseModel, transformer
-from zero2hero.common.registry import registry
-from zero2hero.config.load_config import load_cfg
-from zero2hero.runner.runner import Runner
+from zero2hero import *
 
 
 class CustomDataset(Dataset):
@@ -110,6 +105,7 @@ class MyMetric(BaseMetric):
 
     def compute_metrics(self, results) -> dict:
         acc = []
+        # 这里的result是每一个batch的结果
         for result in results:
             pred = result[0]
             y_shift = result[1]
@@ -126,18 +122,21 @@ class MyMetric2(BaseMetric):
         self.dataset_meta = 'bench_demo'
 
     def process(self, data_batch: Any, data_samples: Sequence[dict]) -> None:
-        pred = data_samples["logit"].argmax(dim = -1)
-        y_shift = data_batch['y_shift']
-        self.results.append([pred, y_shift])
+        pred = data_samples["classify_probs"]
+        label = data_samples['label']
+        self.results.append([pred, label])
 
     def compute_metrics(self, results) -> dict:
         acc = []
+        # 这里的result实际上是每一个chunk的结果
+        # result里是这个chunk的全部batch
         for result in results:
             pred = result[0]
             y_shift = result[1]
-            acc.append((pred == y_shift).float().mean().cpu())
+            # 取batch
+            acc = [(x==y).mean() for x, y in zip(pred, y_shift)]
 
-        acc = (sum(acc) / len(acc)).item()
+        acc = (sum(acc) / len(acc))
 
         return dict(test_acc = acc)
 
@@ -156,7 +155,12 @@ class DumpRunResult(DumpResults):
 
 
 if __name__ == '__main__':
-    cfg = load_cfg(path = 'example/default_cfg.yaml')
+    import argparse
+    arg = argparse.ArgumentParser()
+    arg.add_argument('--cfg', type=str, default='./default_cfg.yaml')
+    args, _ = arg.parse_known_args()
+    cfg_path = args.cfg
+    cfg = load_cfg(cfg_path, from_cli = True)
 
     bench_dataset = CustomDataset(
         vocab_n = cfg.data.vocab_n,
@@ -178,7 +182,9 @@ if __name__ == '__main__':
 
     # optimizer = torch.optim.AdamW(net.parameters(), lr = cfg.optimizer.lr)
     evaluator = Evaluator([MyMetric(), DumpRunResult('./example/generated.pkl')])
-    evaluator_test = Evaluator([MyMetric2(), DumpRunResult('./example/generated.pkl')])
+    evaluator_test = Evaluator([MyMetric(), DumpRunResult('./example/test_result.pkl')])
+
+    callbacks = [EarlyStopCallBack(monitor="loss")]
 
     runner = Runner(
         train_data_loader = bench_loader,
@@ -188,8 +194,20 @@ if __name__ == '__main__':
         epochs = cfg.training.epochs,
         # optimizer = optimizer,
         runner_config = cfg,
+        callbacks = callbacks,
         valid_evaluator = evaluator,
         test_evaluator = evaluator_test
     )
     runner.fit()
+    runner.test()
+    ############# test #############
+    # 1. online: model load_model_checkpoint-> runner.test()
     # runner.test()
+    # 2. offline: 现在的数据变换逻辑还是过于复杂了，容易出错
+    data_samples = load('example/generated_epoch_4.pkl')
+    data_list = []
+    for batch in bench_loader:
+        data_list.append(batch)
+    evaluator_offline = Evaluator([MyMetric2()])
+    #
+    print(evaluator_offline.offline_evaluate(data_samples, data_list, chunk_size = 10))
