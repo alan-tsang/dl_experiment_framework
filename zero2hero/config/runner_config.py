@@ -1,5 +1,5 @@
-"""弃用
-
+"""RunnerConfig: for aspect parameters of the whole runner based on pydantic
+not use anymore, because it will
 """
 from typing import Dict, List
 
@@ -44,8 +44,8 @@ class TrainingConfig(BaseModel):
 class SchedulerConfig(BaseModel):
     type: str = "LinearWarmupCosineLRScheduler"
     min_lr: float = 1e-5
-    init_lr: float = 3e-4
-    warmup_steps: int = 0
+    max_lr: float = 3e-4
+    warmup_rate: float = 0.1
     warmup_start_lr: float = -1
 
 
@@ -57,4 +57,3 @@ class RunnerConfig(BaseModel):
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     run_name: str = "experiment_01"
     run_description: str = ""
-
