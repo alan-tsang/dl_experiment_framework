@@ -1,8 +1,5 @@
 """
- Copyright (c) 2022, salesforce.com, inc.
- All rights reserved.
- SPDX-License-Identifier: BSD-3-Clause
- For full license text, see the LICENSE_Lavis file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+adapted from https://github.com/salesforce/LAVIS/blob/main/lavis/common/registry.py
 """
 
 
@@ -11,7 +8,6 @@ class Registry:
         "model_name_mapping": {},
         "lr_scheduler_name_mapping": {},
         "runner_name_mapping": {},
-        "evaluator_name_mapping": {},
         "metric_name_mapping": {},
         "dataset_name_mapping": {},
         "callback_name_mapping": {},
@@ -32,11 +28,11 @@ class Registry:
         """
 
         def wrap(model_cls):
-            from ..model import BaseModel
+            from ..model import BaseModel, BasePreTrainedModel
 
             assert issubclass(
-                model_cls, BaseModel
-            ), "All models must inherit BaseModel class"
+                model_cls, (BaseModel, BasePreTrainedModel)
+            ), "All models must inherit BaseModel class or BasePreTrainedModel class"
             if name in cls.mapping["model_name_mapping"]:
                 raise KeyError(
                     "Name '{}' already registered for {}.".format(
@@ -108,21 +104,6 @@ class Registry:
 
 
     @classmethod
-    def register_evaluator(cls, name):
-        def wrap(evaluator_cls):
-            if name in cls.mapping["evaluator_name_mapping"]:
-                raise KeyError(
-                    "Name '{}' already registered for {}.".format(
-                        name, cls.mapping["evaluator_name_mapping"][name]
-                    )
-                )
-            cls.mapping["evaluator_name_mapping"][name] = evaluator_cls
-            return evaluator_cls
-
-        return wrap
-
-
-    @classmethod
     def register_callback(cls, name):
         r"""Register a model to registry with key 'name'
 
@@ -132,8 +113,12 @@ class Registry:
         Usage:
 
         """
-
         def wrap(callback_cls):
+            from ..callback.base_callback import BaseCallBack
+            assert issubclass(
+                callback_cls, BaseCallBack
+            ), "All CallBack must inherit BaseCallBack class"
+
             if name in cls.mapping["callback_name_mapping"]:
                 raise KeyError(
                     "Name '{}' already registered for {}.".format(
@@ -184,6 +169,10 @@ class Registry:
         """
 
         def wrap(runner_cls):
+            from ..runner.runner import Runner
+            assert issubclass(
+                runner_cls, Runner
+            ), "All runners must inherit Runner class"
             if name in cls.mapping["runner_name_mapping"]:
                 raise KeyError(
                     "Name '{}' already registered for {}.".format(
@@ -215,7 +204,7 @@ class Registry:
 
     @classmethod
     def register(cls, name, obj):
-        r"""Register an item to registry with key 'name'
+        r"""Register an item to registry with key 'name' to the state dict
 
         Args:
             name: Key with which the item will be registered.
@@ -244,10 +233,6 @@ class Registry:
     @classmethod
     def get_dataset_class(cls, name):
         return cls.mapping["dataset_name_mapping"].get(name, None)
-
-    @classmethod
-    def get_evaluator_class(cls, name):
-        return cls.mapping["evaluator_name_mapping"].get(name, None)
 
     @classmethod
     def get_metric_class(cls, name):
@@ -282,18 +267,12 @@ class Registry:
         return sorted(cls.mapping["callback_name_mapping"].keys())
 
     @classmethod
-    def list_evaluators(cls):
-        return cls.mapping["evaluator_name_mapping"].keys()
-
-    @classmethod
     def list_metrics(cls):
         return cls.mapping["metric_name_mapping"].keys()
-
 
     @classmethod
     def list_lr_schedulers(cls):
         return sorted(cls.mapping["lr_scheduler_name_mapping"].keys())
-
 
     @classmethod
     def get_path(cls, name):
