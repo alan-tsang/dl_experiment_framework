@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 from typing import Optional
 
@@ -14,11 +15,6 @@ class CustomFormatter(logging.Formatter):
     def __init__(self, fmt: Optional[str] = None, datefmt: Optional[str] = None):
         fmt = fmt or '[%(asctime)s] | [%(levelname)s] | [%(filename)s:%(lineno)d %(funcName)s] %(message)s'
         super().__init__(fmt, datefmt)
-        self.terminator = ""  # 禁用默认换行符
-
-    def format(self, record: logging.LogRecord) -> str:
-        message = super().format(record)
-        return message + getattr(record, "end", "\n")
 
 
 class Logger(ManagerMixin):
@@ -48,24 +44,20 @@ class Logger(ManagerMixin):
         self.run_name = run_name
         self._file_handler: Optional[logging.FileHandler] = None
 
-        # 配置处理器
         self._configure_handlers()
 
     def _configure_handlers(self) -> None:
-        """配置控制台和文件处理器"""
-        # 避免重复添加处理器
         if not self._logger.handlers:
-            # 控制台处理器（始终添加，但仅在分布式 Rank 0 或非分布式环境生效）
-            console_handler = logging.StreamHandler()
+            # logging 默认是std.err，与print没有保持一致
+            # 因此会出现打印顺序不符合预期
+            console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(CustomFormatter(datefmt="%Y-%m-%d %H:%M:%S"))
             self._logger.addHandler(console_handler)
 
-        # 文件处理器（仅在 to_file=True 时添加）
         if self.to_file:
             self._add_file_handler()
 
     def _add_file_handler(self) -> None:
-        """添加文件处理器"""
         # 分布式环境下仅在 Rank 0 进程处理
         if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
             return
@@ -81,22 +73,14 @@ class Logger(ManagerMixin):
         # 配置文件处理器
         file_handler = logging.FileHandler(file_path)
         file_handler.setFormatter(CustomFormatter(datefmt="%Y-%m-%d %H:%M:%S"))
-        # file_handler.addFilter(self._distributed_filter)
         self._logger.addHandler(file_handler)
         self._file_handler = file_handler
 
         # 记录日志文件路径
         self._logger.info(f"日志管理器 {self.name} 已创建：{os.path.abspath(file_path)}")
 
-    # @staticmethod
-    # def _distributed_filter(record: logging.LogRecord) -> bool:
-    #     """分布式环境过滤器：仅在 Rank 0 进程记录日志"""
-    #     if torch.distributed.is_initialized():
-    #         return torch.distributed.get_rank() == 0
-    #     return True
 
     def close_file_handler(self) -> None:
-        """关闭文件处理器"""
         if self._file_handler:
             self._logger.removeHandler(self._file_handler)
             self._file_handler.close()
@@ -106,27 +90,25 @@ class Logger(ManagerMixin):
         self,
         text: str,
         level: str = "INFO",
-        end: str = "\n",
     ) -> None:
         log_level = self._LOG_LEVEL_MAP.get(level.upper(), logging.INFO)
         if self._logger.isEnabledFor(log_level):
-            self._logger.log(log_level, text, extra={"end": end}, stacklevel=3)
+            self._logger.log(log_level, text, stacklevel=3)
 
-    # 简化日志方法（直接委托给 log_print）
-    def debug(self, obj: any, end: str = "\n") -> None:
-        self.log(str(obj), "DEBUG", end)
+    def debug(self, obj: any) -> None:
+        self.log(str(obj), "DEBUG")
 
-    def info(self, obj: any, end: str = "\n") -> None:
-        self.log(str(obj), "INFO", end)
+    def info(self, obj: any) -> None:
+        self.log(str(obj), "INFO")
 
-    def warning(self, obj: any, end: str = "\n") -> None:
-        self.log(str(obj), "WARNING", end)
+    def warning(self, obj: any) -> None:
+        self.log(str(obj), "WARNING")
 
-    def error(self, obj: any, end: str = "\n") -> None:
-        self.log(str(obj), "ERROR", end)
+    def error(self, obj: any) -> None:
+        self.log(str(obj), "ERROR")
 
-    def critical(self, obj: any, end: str = "\n") -> None:
-        self.log(str(obj), "CRITICAL", end)
+    def critical(self, obj: any) -> None:
+        self.log(str(obj), "CRITICAL")
 
     @master_only
     def just_print(self, obj: any, end: str = "\n", time_stamp = False, to_file: Optional[bool] = None) -> None:
@@ -135,4 +117,3 @@ class Logger(ManagerMixin):
         print(obj, end=end, flush=True)
         if to_file and self._file_handler:
             self._file_handler.stream.write(f"{obj}{end}")
-
