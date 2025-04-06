@@ -20,6 +20,7 @@ dataset1 = BaseIterableDataset(
     data_source = raw_data,
     process_fn = process_function,
     filter_fn = filter_function,
+    only_local = True,
     process_first = True,
     process_bs = 4,
     filter_bs = 4,
@@ -37,6 +38,7 @@ print("===========")
 
 dataset2 = BaseMapDataset(
     data_source = './data/local_movie_reviews.json',
+    only_local = True,
     process_fn = process_function,
     filter_fn = filter_function,
     metadata = {
