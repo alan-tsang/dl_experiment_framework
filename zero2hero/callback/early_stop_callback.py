@@ -48,7 +48,8 @@ class EarlyStopCallBack(BaseCallBack):
         """
         Check the monitored metric after each epoch and decide if training should stop.
         """
-        current_value = registry.get(self.monitor)
+        current_value = registry.get(f"metric.{self.monitor}")
+        # print(f"current_value: {current_value}")
 
         if current_value is None:
             warnings.warn(f"Warning: monitored metric '{self.monitor}' not found in metric.")
