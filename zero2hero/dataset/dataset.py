@@ -1,7 +1,6 @@
 import os
-import types
-from typing import Union, Optional, Callable, List, Dict, Any
-from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
+from typing import Sequence, Union, Optional, Callable, List, Dict, Any
+from datasets import Dataset, DatasetDict, IterableDataset, load_dataset
 import warnings
 
 from .base_dataset import BaseDataset
@@ -12,7 +11,8 @@ from ..common.registry import registry
 class BaseMapDataset(BaseDataset):
     def __init__(
         self,
-        data_source: Union[str, Dataset, DatasetDict],
+        data_source: Union[Sequence, str, Dataset, DatasetDict],
+        only_local: bool = False,
         process_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
         filter_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
         process_first: bool = True,
@@ -35,7 +35,7 @@ class BaseMapDataset(BaseDataset):
             data_format
         )
         self.split_ratios = split_ratios
-        self._set_dataset(data_source)
+        self._set_dataset(data_source, only_local)
 
         # 自动数据集划分
         if split_ratios:
@@ -50,7 +50,7 @@ class BaseMapDataset(BaseDataset):
             self._prepare_data()
 
 
-    def _set_dataset(self, data_source, data_format=None) -> Dataset or DatasetDict:
+    def _set_dataset(self, data_source, only_local, data_format=None) -> Dataset or DatasetDict:
         # 加载数据集
         if isinstance(data_source, str):
             """return a Dataset object"""
@@ -70,8 +70,10 @@ class BaseMapDataset(BaseDataset):
             else:
                 """return a DatasetDict object"""
                 # HuggingFace Hub 名称
-                self.dataset = load_dataset(data_source, streaming=True)
-
+                if isinstance(data_source, str):
+                   self.dataset = from_hf_dataset(data_source, None, only_local)
+        elif isinstance(data_source, Sequence):
+            self.dataset = from_hf_dataset(data_source[0], data_source[1], only_local)
         elif isinstance(data_source, (Dataset, DatasetDict)):
             self.dataset = data_source
         else:
@@ -138,6 +140,12 @@ class BaseMapDataset(BaseDataset):
     def __getitem__(self, idx: int):
         return self.dataset[idx]
 
+
+    def sample(self, n=5) -> Dataset:
+        """快速采样"""
+        return self.dataset.select(range(min(n, len(self))))
+
+
     @property
     def dataset_card(self) -> Dict:
         """生成数据集卡片"""
@@ -154,7 +162,8 @@ class BaseMapDataset(BaseDataset):
 class BaseIterableDataset(BaseDataset):
     def __init__(
         self,
-        data_source: Union[str, Dataset, DatasetDict],
+        data_source: Union[str, Sequence, Dataset, DatasetDict],
+        only_local: bool = False,
         process_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
         filter_fn: Optional[Union[Dict[str, Callable], Callable[..., Any]]] = None,
         process_first: bool = True,
@@ -174,13 +183,13 @@ class BaseIterableDataset(BaseDataset):
             filter_bs,
             metadata,
         )
-        self._set_dataset(data_source, data_format)
+        self._set_dataset(data_source, data_format, only_local)
 
         self._prepare_data()
 
 
-    def _set_dataset(self, data_source: Union[str, Dataset, DatasetDict],
-                     data_format: Optional[str] = None,):
+    def _set_dataset(self, data_source: Union[str, Sequence, Dataset, DatasetDict],
+                     data_format: Optional[str] = None, only_local: bool = False):
         # 加载数据集
         if isinstance(data_source, str):
             if os.path.exists(data_source):
@@ -201,7 +210,9 @@ class BaseIterableDataset(BaseDataset):
                 )
             else:
                 # HuggingFace Hub 名称
-                self.dataset = load_dataset(data_source, streaming=True)
+                self.dataset = from_hf_dataset(data_source, None, only_local, streaming = True)
+        elif isinstance(data_source, Sequence):
+            self.dataset = from_hf_dataset(data_source[0], data_source[1], only_local, streaming=True)
         elif isinstance(data_source, (Dataset, DatasetDict)):
             self.dataset = data_source.to_iterable_dataset()
         elif isinstance(data_source, IterableDataset):
@@ -241,3 +252,11 @@ def infer_data_format(path: str) -> Optional[str]:
         'tsv': 'csv'  # 可能需要指定分隔符
     }
     return format_mapping.get(ext)
+
+
+def from_hf_dataset(path: str, name, only_local, streaming = False) -> Dataset:
+    if not only_local:
+        dataset = load_dataset(path, name, streaming = streaming)
+    else:
+        dataset = load_dataset(path, name, streaming = streaming, trust_remote_code = False)
+    return dataset
