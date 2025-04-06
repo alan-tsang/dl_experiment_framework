@@ -28,7 +28,7 @@ from ..callback.base_callback import BaseCallBack
 from ..common.dl_util import get_batch_n, get_model_info
 from ..common.logger import Logger
 from ..common.registry import registry
-from ..common.util import first_call_warning
+from ..common.util import first_call_warning, better_dict_4_print
 
 from ..dist.init import is_main_process, main_process
 from ..scheduler import LinearWarmupCosineLRScheduler
@@ -345,7 +345,7 @@ class Runner(RunnerBase):
     def _apply_launch_strategy(self):
         model_info = get_model_info(self.model)
         registry.register("model_info", model_info)
-        print(self.runner_config)
+        print(better_dict_4_print(self.runner_config))
 
         # 单卡也使用分布式环境
         if torch.cuda.is_available():
