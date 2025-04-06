@@ -1,6 +1,6 @@
 from typing import Any, Iterator, List, Optional, Sequence, Union
 
-from ..dataset.utils import pseudo_collate
+from ..dataset.utils import pseudo_collate, default_collate
 from ..common.registry import registry
 from .base_metric import BaseMetric
 
@@ -98,6 +98,29 @@ class Evaluator:
                          chunk_size: int = 1):
         """Offline evaluate the dumped predictions on the given data .
 
+        given data is a Sequence.
+        if it is a list of dict:
+        [
+            {'x1': x11, 'x2': x21, 'x3': x31……},
+            {'x1': x12, 'x2': x22, 'x3': x32……}
+        ]
+        pesudo_collate will make it
+        [
+            {
+                'x1': [x11, x12……]
+                'x2': [x21, x22……]
+            }
+        ]
+        if it is a list of tensor:
+        [
+            [x11, x21, x31……],
+            [x12, x22, x32……]
+        ]
+        pesudo_collate will make it
+        [
+            [(x11, x12……), (x21, x22……), (x31, x32……)]
+        ]
+
         Args:
             data_samples (Sequence): All predictions and ground truth of the
                 model and the validation set.
@@ -134,5 +157,6 @@ class Evaluator:
             else:
                 data_chunk = None
             size += len(output_chunk)
+            output_chunk = pseudo_collate(output_chunk)
             self.process(output_chunk, data_chunk)
         return self.evaluate(size)
