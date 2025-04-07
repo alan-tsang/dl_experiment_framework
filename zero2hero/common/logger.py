@@ -13,7 +13,7 @@ from ..common.util import now
 class CustomFormatter(logging.Formatter):
     """自定义 Formatter，支持动态控制换行符"""
     def __init__(self, fmt: Optional[str] = None, datefmt: Optional[str] = None):
-        fmt = fmt or '[%(asctime)s] | [%(levelname)s] | [%(filename)s:%(lineno)d %(funcName)s] %(message)s'
+        fmt = fmt or '[%(asctime)s] | [%(levelname)s] | [%(filename)s:%(lineno)d #%(funcName)s()] %(message)s'
         super().__init__(fmt, datefmt)
 
 

@@ -85,7 +85,7 @@ class LinearWarmupCosineLRScheduler:
                 warmup_start_lr=self.warmup_start_lr,
                 max_lr=self.max_lr,
             )
-            print(lr)
+            # print(lr)
         else:
             lr = cosine_lr_schedule(
                 step=cur_step - self.warmup_steps,
@@ -94,7 +94,7 @@ class LinearWarmupCosineLRScheduler:
                 max_lr=self.max_lr,
                 min_lr=self.min_lr,
             )
-            print(lr)
+            # print(lr)
 
 
 def cosine_lr_schedule(optimizer, step, max_steps, max_lr, min_lr):

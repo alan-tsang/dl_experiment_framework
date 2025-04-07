@@ -1,10 +1,10 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='zero2hero',
     version='1.3.0',
-    packages=['zero2hero', 'zero2hero.dist', 'zero2hero.model', 'zero2hero.model.transformer', 'zero2hero.common', 'zero2hero.config', 'zero2hero.runner', 'zero2hero.callback'],
-    url='https://www.github.com/alan-tsang',
+    packages = find_packages(),
+    url='https://www.github.com/alan-tsang/dl_experiment_framework',
     license='LGPL',
     author='zhicun zeng',
     author_email='leibzc@163.com',
@@ -12,7 +12,7 @@ setup(
     install_requires=[
         "torch>=1.11.0",
         "datasets",
-        "omegaconf",
+        "omegaconf>=1.4.0",
         "numpy",
         "pandas",
         "pyyaml"

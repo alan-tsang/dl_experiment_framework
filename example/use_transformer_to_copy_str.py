@@ -204,7 +204,7 @@ if __name__ == '__main__':
     # 1. online: model load_model_checkpoint-> runner.test()
     # runner.test()
     # 2. offline: 现在的数据变换逻辑还是过于复杂了，容易出错
-    data_samples = load('example/generated_epoch_4.pkl')
+    data_samples = load('example/test_result_epoch_4.pkl')
     data_list = []
     for batch in bench_loader:
         data_list.append(batch)
