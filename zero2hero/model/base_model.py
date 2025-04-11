@@ -87,14 +87,11 @@ class BaseModel(nn.Module):
         else:
             raise ValueError("Must specify type when using BaseModel directly")
 
-        # 提取模型构造参数（过滤非法参数）
         valid_args = inspect.signature(model_cls.__init__).parameters
         model_args = {k: v for k, v in config_dict.items() if k in valid_args}
 
-        # 初始化模型实例
         model = model_cls(**model_args)
 
-        # 加载预训练权重(可选)
         if 'pretrained' in config_dict:
             load_result = model.load_checkpoint(config_dict['pretrained'])
             # 检查权重加载（根据需求调整）
