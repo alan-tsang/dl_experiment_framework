@@ -54,8 +54,15 @@ training:
     loss: false
     valid_acc: true
     test_acc: true
+  activation_checkpoint: [
+    'transformer.encoder.layers.0',
+    'transformer.encoder.layers.1',
+    'transformer.decoder.layers.0',
+    'transformer.decoder.layers.1'
+  ]
+  resume_from: "./checkpoints/experiment-01_2025-04-11_21-31-48/epoch_4"
   valid_every_n_epochs: 1
   test_every_n_epochs: 1
   progress_every_n_epochs: 1
   progress_every_n_batches: 1
-  ds_config: null
+  ds_config: './ds.json'

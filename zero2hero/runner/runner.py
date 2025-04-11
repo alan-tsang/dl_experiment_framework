@@ -14,7 +14,7 @@ try to use your own callbacks, then you can do something in different lifecycle 
 """
 import contextlib
 import warnings
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 import torch
 import torch.distributed as dist
@@ -72,19 +72,26 @@ class Runner(RunnerBase):
 
         self.scheduler = None
 
-        self._assign_runtime_cfg()
         self._assign_runner_cfg(self.runner_config)
         self._assign_logger()
+        self._assign_runtime_parameter()
         self._apply_launch_strategy()
         self._setup_builtin_callbacks()
 
 
     def fit(self, *args, **kwargs):
+        start_epoch = 0
+        start_batch = 0
+        if self.resume_from:
+            start_epoch, start_batch = self.checkpoint_callback.load_checkpoint(self.resume_from)
+        if start_epoch >= self.epochs:
+            self.logger.info("恢复点epoch>=设定的最大epoch，跳过")
+            return
         try:
             self.before_all()
             self.before_train()
 
-            for epoch_i in range(self.epochs):
+            for epoch_i in range(start_epoch, self.epochs):
                 registry.register("current_epoch", epoch_i)
                 self.before_running_epoch()
                 if registry.get("stop_training"):
@@ -101,6 +108,7 @@ class Runner(RunnerBase):
         finally:
             self.after_train()
             self.after_all()
+
 
     def train(self):
         current_epoch = registry.get("current_epoch")
@@ -298,6 +306,7 @@ class Runner(RunnerBase):
             print(registry.get("model_info"))
 
 
+
     def after_all(self):
         super().after_all()
         self.logger.close_file_handler()
@@ -322,6 +331,7 @@ class Runner(RunnerBase):
     def _assign_runner_cfg(cfg: dict):
         registry.register("cfg", cfg)
 
+
     def _assign_logger(self):
         # 有的话就用已创建的，忽略参数
         # 没有的话就会用这些参数创建
@@ -333,14 +343,23 @@ class Runner(RunnerBase):
             # folder = registry.get("cfg.log.folder"),
             run_name = registry.get("cfg.run_name")
         )
-    def _assign_runtime_cfg(self):
+
+
+    def _assign_runtime_parameter(self):
         if self.train_data_loader:
             self.train_size = len(self.train_data_loader)
         if self.valid_data_loader:
             self.valid_size = len(self.valid_data_loader)
         if self.test_data_loader:
             self.test_size = len(self.test_data_loader)
+
         self.accumulation_count = 0
+        self.resume_from = registry.get("cfg.training.resume_from")
+        if (modules := registry.get("cfg.training.activation_checkpoint")) is not None:
+            self.logger.info(f"启用激活检查点: {modules}")
+            from .activation_checkpointing import turn_on_activation_checkpointing
+            turn_on_activation_checkpointing(self.model, modules)
+
 
     def _apply_launch_strategy(self):
         model_info = get_model_info(self.model)
@@ -381,7 +400,6 @@ class Runner(RunnerBase):
                 optimizer = self.optimizer if self.optimizer is not None else None,
                 model_parameters = self.model.parameters(),
                 config = ds_config,
-                training_data = self.train_data_loader,
             )
             registry.register("start_msg", "使用deepspeed启动中...")
         else:
@@ -399,6 +417,7 @@ class Runner(RunnerBase):
 
         self._set_scheduler()
 
+
     def _set_scheduler(self):
         if not registry.get("cfg.training.ds_config"):
             scheduler_cls = registry.get_lr_scheduler_class(registry.get("cfg.scheduler.type"))
@@ -412,6 +431,7 @@ class Runner(RunnerBase):
         else:
             self.logger.warning("启用了deepspeed，为自动配置warmup，"
                                 "如果你想的话，请在配置文件中指定scheduler")
+
 
     def _prepare_dataloader(self):
         if dist.is_available() and dist.is_initialized():
@@ -460,8 +480,9 @@ class Runner(RunnerBase):
             else:
                 wandb_callback = WandbCallback()
 
-        checkpoint_callback = CheckpointCallback(model = self.model) \
+        checkpoint_callback = CheckpointCallback(runner = self) \
                                 if registry.get("cfg.pt.pt_save") else None
+        self.checkpoint_callback = checkpoint_callback
 
         callbacks = [
             progress_callback,
@@ -471,6 +492,7 @@ class Runner(RunnerBase):
         ]
         callbacks.extend(self.callbacks)
         self._register_callbacks(callbacks)
+
 
     @staticmethod
     def _move_train_data_to_device(data):
@@ -485,11 +507,13 @@ class Runner(RunnerBase):
             warnings.warning(f"move data to device {device} failed, data type: {type(data)}; default return raw data!")
             return data
 
+
     def _move_valid_data_to_device(self, data):
         """
         maybe should be overridden
         """
         return self._move_train_data_to_device(data)
+
 
     def _move_test_data_to_device(self, data):
         """
