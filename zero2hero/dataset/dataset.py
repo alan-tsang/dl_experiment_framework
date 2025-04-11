@@ -55,29 +55,33 @@ class BaseMapDataset(BaseDataset):
         if isinstance(data_source, str):
             """return a Dataset object"""
             if os.path.exists(data_source):
-                if data_format is None:
-                    data_format = infer_data_format(data_source)
+                if os.path.isdir(data_source):
+                    self.dataset = load_dataset(data_source)
+                else:
                     if data_format is None:
-                        raise ValueError("无法推断数据格式，请通过data_format参数指定。")
+                        data_format = infer_data_format(data_source)
+                        if data_format is None:
+                            raise ValueError("无法推断数据格式，请通过data_format参数指定。")
 
-                self.dataset = load_dataset(
-                    data_format,
-                    # 本地加载数据集，我往往不手动分割数据集，所以默认加载train集实际就是全部数据
-                    # 后续再分割
-                    split = 'train',
-                    data_files=data_source,
-                )
+                    self.dataset = load_dataset(
+                        data_format,
+                        # 本地加载数据集，我往往不手动分割数据集，所以默认加载train集实际就是全部数据
+                        # 后续再分割
+                        split = 'train',
+                        data_files=data_source,
+                    )
             else:
                 """return a DatasetDict object"""
                 # HuggingFace Hub 名称
                 if isinstance(data_source, str):
                    self.dataset = from_hf_dataset(data_source, None, only_local)
+
         elif isinstance(data_source, Sequence):
             self.dataset = from_hf_dataset(data_source[0], data_source[1], only_local)
         elif isinstance(data_source, (Dataset, DatasetDict)):
             self.dataset = data_source
         else:
-            raise ValueError("不支持的数据源类型")
+            raise ValueError("不支持的数据源类型，当前支持str, [str, str], Dataset, DatasetDict类型")
 
 
     def auto_split(self, ratios: tuple) -> DatasetDict:
@@ -141,9 +145,11 @@ class BaseMapDataset(BaseDataset):
         return self.dataset[idx]
 
 
-    def sample(self, n=5) -> Dataset:
+    def sample(self, split, n=1, start = 0) -> Dataset:
         """快速采样"""
-        return self.dataset.select(range(min(n, len(self))))
+        if isinstance(self.dataset, DatasetDict):
+            return self.dataset[split].select(range(start, min(n, len(self.dataset[split]))))
+        return self.dataset.select(range(start, min(n, len(self))))
 
 
     @property
@@ -151,10 +157,11 @@ class BaseMapDataset(BaseDataset):
         """生成数据集卡片"""
         return {
             **self.metadata,
-            "splits": list(self.dataset.keys()) if isinstance(self.dataset, DatasetDict) else [self.split],
-            "size": len(self),
+            "splits": list(self.dataset.keys()) if isinstance(self.dataset, DatasetDict) else 'no split',
+            "size": len(self) if isinstance(self.dataset, Dataset) else {
+                split: len(self.dataset[split]) for split in self.dataset.keys()
+            },
             "streaming": False,
-            "features": self.dataset.features if hasattr(self.dataset, 'features') else None
         }
 
 
@@ -184,13 +191,12 @@ class BaseIterableDataset(BaseDataset):
             metadata,
         )
         self._set_dataset(data_source, data_format, only_local)
-
         self._prepare_data()
 
 
     def _set_dataset(self, data_source: Union[str, Sequence, Dataset, DatasetDict],
                      data_format: Optional[str] = None, only_local: bool = False):
-        # 加载数据集
+
         if isinstance(data_source, str):
             if os.path.exists(data_source):
                 if os.path.isdir(data_source):
@@ -203,15 +209,16 @@ class BaseIterableDataset(BaseDataset):
 
                 self.dataset = load_dataset(
                     data_format,
-                    # wtf?
                     split = 'train',
                     data_files=data_source,
                     streaming=True
                 )
             else:
-                # HuggingFace Hub 名称
+                # 远程HuggingFace Hub
                 self.dataset = from_hf_dataset(data_source, None, only_local, streaming = True)
+
         elif isinstance(data_source, Sequence):
+            # 远程HuggingFace Hub
             self.dataset = from_hf_dataset(data_source[0], data_source[1], only_local, streaming=True)
         elif isinstance(data_source, (Dataset, DatasetDict)):
             self.dataset = data_source.to_iterable_dataset()
@@ -224,24 +231,25 @@ class BaseIterableDataset(BaseDataset):
     def __iter__(self):
         yield from self.dataset
 
+
     @property
     def dataset_card(self) -> Dict:
         """生成数据集卡片"""
         return {
             **self.metadata,
             "streaming": True,
-            "features": self.dataset.features if hasattr(self.dataset, 'features') else None
         }
 
     def save_to_disk(self, path: str):
-        warnings.warn("流式数据集不支持保存到磁盘。")
+        os.makedirs(path, exist_ok=True)
+        self.save_case(path)
+        self.save_card(path)
 
-        return
+        warnings.warn("case和dataset card已保存，但是流式数据集不支持保存到磁盘, 请首先转换为MapStyleDataset")
 
 
 
 def infer_data_format(path: str) -> Optional[str]:
-    """根据文件扩展名推断数据格式"""
     ext = os.path.splitext(path)[1].lower().lstrip('.')
     format_mapping = {
         'csv': 'csv',
@@ -249,14 +257,14 @@ def infer_data_format(path: str) -> Optional[str]:
         'jsonl': 'json',
         'txt': 'text',
         'text': 'text',
-        'tsv': 'csv'  # 可能需要指定分隔符
+        'tsv': 'csv'
     }
     return format_mapping.get(ext)
 
 
 def from_hf_dataset(path: str, name, only_local, streaming = False) -> Dataset:
     if not only_local:
-        dataset = load_dataset(path, name, streaming = streaming)
+        dataset = load_dataset(path, name, streaming = streaming, trust_remote_code = True)
     else:
-        dataset = load_dataset(path, name, streaming = streaming, trust_remote_code = False)
+        dataset = load_dataset(path, name, streaming = streaming, trust_remote_code = True, local_files_only=True)
     return dataset

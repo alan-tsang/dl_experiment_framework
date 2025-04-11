@@ -2,6 +2,8 @@
 BaseDataset: based on HuggingFace Datasets, with some additional features.
 """
 
+import json
+import os.path
 import types
 import warnings
 from typing import Union, Optional, Callable, List, Dict
@@ -40,7 +42,7 @@ class BaseDataset(ABC):
         self.process_first = process_first
         self.process_bs = process_bs
         self.filter_bs = filter_bs
-        self.metadata = metadata or {"description": "Custom Dataset"}
+        self.metadata = metadata or {"description": "Base Dataset"}
         self.data_format = data_format
         self.dataset = None
 
@@ -106,9 +108,7 @@ class BaseDataset(ABC):
                                                            "process_fn should be a function or None.")
             assert not isinstance(self.filter_fn, dict),("filter_fn is a dict, but dataset is a single dataset."
                                                          "filter_fn should be a function or None.")
-
             self.dataset = _map_filter(self.dataset, self.process_fn, self.filter_fn)
-
 
         elif isinstance(self.dataset, DatasetDict):
             # 如果process_fn和filter_fn是函数，转换为字典
@@ -128,13 +128,51 @@ class BaseDataset(ABC):
 
 
     def save_to_disk(self, path: str):
-        """保存到本地"""
+        os.makedirs(path, exist_ok=True)
+
+        self.save_case(path)
+        self.save_card(path)
         self.dataset.save_to_disk(path)
+
+
+    def save_case(self, path: str):
+        if isinstance(self.dataset, DatasetDict):
+            for split in self.dataset.keys():
+                case = str(self.dataset[split][0])
+                with open(f"{path}/{split}_case.txt", "w") as f:
+                    f.write(case)
+        elif isinstance(self.dataset, Dataset):
+            case = str(self.dataset[0])
+            with open(f"{path}/dataset_case.txt", "w") as f:
+                f.write(case)
+        elif isinstance(self.dataset, IterableDataset):
+            try:
+                case = str(next(iter(self.dataset)))
+            except StopIteration:
+                warnings.warn("流式数据集未保存case data，因为现在已经没有数据，请检查数据源。")
+            else:
+                with open(f"{path}/dataset_case.txt", "w") as f:
+                    f.write(case)
+
+
+    def save_card(self, path: str):
+        card = self.dataset_card
+        with open(f"{path}/dataset_card.json", "w") as f:
+            json.dump(card, f, indent=4)
+
+
+    @property
+    def dataset_card(self) -> Dict:
+        return {
+            **self.metadata,
+        }
+
 
     @classmethod
     def from_cfg(cls, path: str, **kwargs) -> "BaseDataset":
-        """从本地加载"""
+        """兼容配置文件"""
         return cls(data_source = path, **kwargs)
+
 
     def push_to_hub(self, repo_id: str, **kwargs):
         """上传到HuggingFace Hub"""
