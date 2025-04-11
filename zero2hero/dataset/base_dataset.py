@@ -42,7 +42,7 @@ class BaseDataset(ABC):
         self.process_first = process_first
         self.process_bs = process_bs
         self.filter_bs = filter_bs
-        self.metadata = metadata or {"description": "Base Dataset"}
+        self.metadata = metadata or {}
         self.data_format = data_format
         self.dataset = None
 
