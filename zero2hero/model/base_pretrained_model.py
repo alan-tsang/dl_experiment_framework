@@ -22,31 +22,21 @@ import torch
 
 
 class BaseConfig(PretrainedConfig):
-    model_type = "base-model"
+    model_type = ""
 
     def __init__(
             self,
-            vocab_size: int = 50257,
-            n_layer: int = 12,
-            n_head: int = 12,
-            dim_embed: int = 768,
-            **kwargs
+            **kwargs,
     ):
-        self.vocab_size = vocab_size
-        self.n_layer = n_layer
-        self.n_head = n_head
-        self.dim_embed = dim_embed
         super().__init__(**kwargs)
 
     @classmethod
     def get_config_class(cls):
         return cls
 
-
 class BaseModelOutput(ModelOutput):
-    last_hidden_state: torch.FloatTensor = None
-    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     logits: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
 
 
 class BasePreTrainedModel(PreTrainedModel):
