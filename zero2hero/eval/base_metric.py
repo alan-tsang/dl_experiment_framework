@@ -171,7 +171,6 @@ class DumpResults(BaseMetric, ABC):
         if not out_file_path.endswith(('.pkl', '.pickle')):
             raise ValueError('The output file must be a pkl file.')
         self.out_file_path = out_file_path
-        self.logger = Logger.get_instance("logger")
 
     @abstractmethod
     def process(self, data_batch: Any, predictions: dict) -> None:
@@ -193,8 +192,7 @@ class DumpResults(BaseMetric, ABC):
         with open(out_file, 'wb') as f:
             pickle.dump(results, f)
 
-
-        self.logger.info(f'Results saved to {out_file}.')
+        Logger.get_instance("logger").info(f'Results saved to {out_file}.')
         return {}
 
 
