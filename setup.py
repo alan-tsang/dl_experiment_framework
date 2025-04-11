@@ -10,9 +10,9 @@ setup(
     author_email='leibzc@163.com',
     description='personal deep learning experiment framework for pytorch',
     install_requires=[
-        "torch>=1.11.0",
+        "torch>=1.11.0", # 支持torchrun的版本
         "datasets",
-        "omegaconf>=1.4.0",
+        "omegaconf>=1.4.0", # 之前是否支持from_cli没有查到
         "numpy",
         "pandas",
         "pyyaml"
