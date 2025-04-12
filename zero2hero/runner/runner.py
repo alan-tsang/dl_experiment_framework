@@ -504,7 +504,7 @@ class Runner(RunnerBase):
         elif isinstance(data, torch.Tensor):
             return data.to(device)
         else:
-            warnings.warning(f"move data to device {device} failed, data type: {type(data)}; default return raw data!")
+            warnings.warn(f"move data to device {device} failed, data type: {type(data)}; default return raw data!")
             return data
 
 
