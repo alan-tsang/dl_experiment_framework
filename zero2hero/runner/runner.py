@@ -35,8 +35,30 @@ from ..scheduler import LinearWarmupCosineLRScheduler
 
 
 class Runner(RunnerBase):
-    accumulation_count = 0
+    """
+    AI 模型训练核心执行器
 
+    ██████╗ ██╗███╗   ██╗███╗   ██╗███████╗██████╗
+    ██╔══██╗██║████╗  ██║████╗  ██║██╔════╝██╔══██╗
+    ██████╔╝██║██╔██╗ ██║██╔██╗ ██║█████╗  ██████╔╝
+    ██╔══██╗██║██║╚██╗██║██║╚██╗██║██╔══╝  ██╔══██╗
+    ██║  ██║██║██║ ╚████║██║ ╚████║███████╗██║  ██║
+    ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
+
+    典型用法：
+    custom your yaml config file based on the cfg in example,
+    >>> runner = Runner(
+            model=your_model,
+            train_data_loader=train_loader,
+            ...
+        )
+    >>> runner.fit()
+
+    扩展点：
+    - 覆盖 _move_*_data_to_device 方法实现自定义设备迁移
+    - 继承 TrainingSteps 类实现自定义训练逻辑
+    - 通过 callback_manager 注册自定义回调
+    """
     def __init__(
             self,
             model: BaseModel,
@@ -101,10 +123,10 @@ class Runner(RunnerBase):
                 self.test()
                 self.after_running_epoch()
         except BaseException as e:
-            self.logger.critical(f"训练时，发生异常：{e.__class__.__name__}")
-            print(e)
+            self.logger.critical(f"训练时，发生异常：{e.__class__.__name__},"
+                                 f"异常信息：{e}")
             self.on_exception(e)
-            raise
+            # raise
         finally:
             self.after_train()
             self.after_all()
@@ -181,7 +203,7 @@ class Runner(RunnerBase):
                 scaler.scale(loss).backward()
                 # 混合精度训练中，梯度缩放器维护的梯度状态可能与实际梯度不同步。
                 # 如果在多个反向传播调用后才执行unscale_()，可能导致梯度状态不一致。
-                scaler.unscale_(self.optimizer)
+                # scaler.unscale_(self.optimizer)
             else:
                 loss.backward()
 
@@ -347,11 +369,11 @@ class Runner(RunnerBase):
 
     def _assign_runtime_parameter(self):
         if self.train_data_loader:
-            self.train_size = len(self.train_data_loader)
+            self.train_size = len(self.train_data_loader.dataset)
         if self.valid_data_loader:
-            self.valid_size = len(self.valid_data_loader)
+            self.valid_size = len(self.valid_data_loader.dataset)
         if self.test_data_loader:
-            self.test_size = len(self.test_data_loader)
+            self.test_size = len(self.test_data_loader.dataset)
 
         self.accumulation_count = 0
         self.resume_from = registry.get("cfg.training.resume_from")
@@ -481,7 +503,8 @@ class Runner(RunnerBase):
                 wandb_callback = WandbCallback()
 
         checkpoint_callback = CheckpointCallback(runner = self) \
-                                if registry.get("cfg.pt.pt_save") else None
+                                if registry.get("cfg.pt.pt_save") \
+                                   or self.resume_from else None
         self.checkpoint_callback = checkpoint_callback
 
         callbacks = [
@@ -495,17 +518,22 @@ class Runner(RunnerBase):
 
 
     @staticmethod
-    def _move_train_data_to_device(data):
-        device = registry.get("device")
-        if isinstance(data, (list, tuple)):
-            return [d.to(device) for d in data]
+    def _move_data_to_device(self, data, device):
+        if isinstance(data, torch.Tensor):
+            return data.to(device, non_blocking = True)
+        elif isinstance(data, (list, tuple)):
+            return [self._move_data_to_device(d, device) for d in data]
         elif isinstance(data, dict):
-            return {k: v.to(device) for k, v in data.items()}
-        elif isinstance(data, torch.Tensor):
-            return data.to(device)
+            return {k: self._move_data_to_device(v, device) for k, v in data.items()}
         else:
             warnings.warn(f"move data to device {device} failed, data type: {type(data)}; default return raw data!")
             return data
+
+    def _move_train_data_to_device(self, data):
+        """
+        maybe should be overridden
+        """
+        return self._move_data_to_device(data, registry.get("device"))
 
 
     def _move_valid_data_to_device(self, data):
@@ -513,7 +541,6 @@ class Runner(RunnerBase):
         maybe should be overridden
         """
         return self._move_train_data_to_device(data)
-
 
     def _move_test_data_to_device(self, data):
         """
