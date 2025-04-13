@@ -113,18 +113,23 @@ class BaseMapDataset(BaseDataset):
         )
 
 
-    def get_subset(self, split, indices: List[int]) -> "BaseMapDataset":
+    def get_subset(self, split = None, n = 1, start = 0) -> "BaseMapDataset":
         """获取子集"""
         if isinstance(self.dataset, DatasetDict):
+            assert split is not None, "split should be specified when dataset is a DatasetDict."
             return BaseMapDataset(
-                data_source = self.dataset[split].select(indices),
+                data_source = self.dataset[split].select(
+                    range(start, min(start + n, len(self.dataset[split])))
+                ),
                 process_fn = None,
                 filter_fn = None,
                 split_ratios = None,
                 metadata = self.metadata
             )
         return BaseMapDataset(
-            data_source = self.dataset.select(indices),
+            data_source = self.dataset.select(
+                range(start, min(start + n, len(self)))
+            ),
             process_fn = None,
             filter_fn = None,
             split_ratios = None,
@@ -148,8 +153,10 @@ class BaseMapDataset(BaseDataset):
     def sample(self, split, n=1, start = 0) -> Dataset:
         """快速采样"""
         if isinstance(self.dataset, DatasetDict):
-            return self.dataset[split].select(range(start, min(n, len(self.dataset[split]))))
-        return self.dataset.select(range(start, min(n, len(self))))
+            return self.dataset[split].select(
+                range(start, min(start + n, len(self.dataset[split])))
+            )
+        return self.dataset.select(range(start, min(start + n, len(self))))
 
 
     @property
