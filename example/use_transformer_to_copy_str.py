@@ -3,7 +3,7 @@ from typing import Any, Sequence
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from zero2hero import *
+from y_rgb import *
 
 
 class CustomDataset(Dataset):

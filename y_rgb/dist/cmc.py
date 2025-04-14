@@ -116,11 +116,11 @@ def all_gather(data: Tensor,
 
     Note:
         Unlike PyTorch ``torch.distributed.all_gather``, :meth:`all_gather` in
-        zero2hero does not pass in an empty list ``gather_list`` and returns
+        y_rgb does not pass in an empty list ``gather_list`` and returns
         the ``gather_list`` directly, which is more convenient. The difference
         between their interfaces is as below:
 
-        - zero2hero: all_gather(data, group) -> gather_list
+        - y_rgb: all_gather(data, group) -> gather_list
         - PyTorch: all_gather(gather_list, data, group) -> None
 
     Args:
@@ -191,11 +191,11 @@ def gather(data: Tensor,
 
     Note:
         Unlike PyTorch ``torch.distributed.gather``, :meth:`gather` in
-        zero2hero does not pass in an empty list ``gather_list`` and returns
+        y_rgb does not pass in an empty list ``gather_list`` and returns
         the ``gather_list`` directly, which is more convenient. The difference
         between their interfaces is as below:
 
-        - zero2hero: gather(data, dst, group) -> gather_list
+        - y_rgb: gather(data, dst, group) -> gather_list
         - PyTorch: gather(data, gather_list, dst, group) -> None
 
     Args:
@@ -684,11 +684,11 @@ def all_gather_object(data: Any,
 
     Note:
         Unlike PyTorch ``torch.distributed.all_gather_object``,
-        :meth:`all_gather_object` in zero2hero does not pass in an empty list
+        :meth:`all_gather_object` in y_rgb does not pass in an empty list
         ``gather_list`` and returns the ``gather_list`` directly, which is
         more convenient. The difference between their interfaces is as below:
 
-        - zero2hero: all_gather_object(data, group) -> gather_list
+        - y_rgb: all_gather_object(data, group) -> gather_list
         - PyTorch: all_gather_object(gather_list, data, group) -> None
 
     Args:
@@ -850,11 +850,11 @@ def gather_object(data: Any,
 
     Note:
         Unlike PyTorch ``torch.distributed.gather_object``,
-        :meth:`gather_object` in zero2hero does not pass in an empty list
+        :meth:`gather_object` in y_rgb does not pass in an empty list
         ``gather_list`` and returns the ``gather_list`` directly, which is
         more convenient. The difference between their interfaces is as below:
 
-        - zero2hero: gather_object(data, dst, group) -> gather_list
+        - y_rgb: gather_object(data, dst, group) -> gather_list
         - PyTorch: gather_object(data, gather_list, data, group) -> None
 
     Args:

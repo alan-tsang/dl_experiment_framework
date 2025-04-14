@@ -1,5 +1,4 @@
-from zero2hero.dataset.dataset import BaseIterableDataset, BaseMapDataset
-from datasets import Dataset
+from y_rgb.dataset.dataset import BaseIterableDataset, BaseMapDataset
 
 def process_function(example):
     """清洗数据：小写化、去除标点"""

@@ -1,7 +1,7 @@
 import unittest
 import torch
 import torch.utils.data
-from zero2hero.dataset.utils import pseudo_collate, default_collate
+from y_rgb.dataset.utils import pseudo_collate, default_collate
 
 
 class TestCollateFunctions(unittest.TestCase):
