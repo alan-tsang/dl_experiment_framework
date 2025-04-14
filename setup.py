@@ -1,14 +1,15 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='zero2hero',
-    version='1.3.0',
+    name='y_rgb',
+    version='1.4.0',
     packages = find_packages(),
     url='https://www.github.com/alan-tsang/dl_experiment_framework',
     license='LGPL',
     author='zhicun zeng',
     author_email='leibzc@163.com',
-    description='personal deep learning experiment framework for pytorch',
+    description='a personal deep learning experiment framework for pytorch',
+    long_description='you are really a good boy! Y-RGB!',
     install_requires=[
         "torch>=1.11.0", # 支持torchrun的版本
         "datasets",
