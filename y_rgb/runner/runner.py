@@ -392,7 +392,8 @@ class Runner(RunnerBase):
         if torch.cuda.is_available():
             # if dist.is_available() and not dist.is_initialized():
             from ..dist.init import init_distributed_mode
-            init_distributed_mode()
+            if not dist.is_initialized():
+                init_distributed_mode()
             device = torch.device(f'cuda:{dist.get_rank()}')
             self._prepare_dataloader()
         else:

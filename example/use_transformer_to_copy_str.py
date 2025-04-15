@@ -160,7 +160,7 @@ if __name__ == '__main__':
     arg.add_argument('--cfg', type=str, default='./default_cfg.yaml')
     args, _ = arg.parse_known_args()
     cfg_path = args.cfg
-    cfg = load_cfg(cfg_path, from_cli = True)
+    cfg = load_cfg(cfg_path)
 
 
     bench_dataset = CustomDataset(
