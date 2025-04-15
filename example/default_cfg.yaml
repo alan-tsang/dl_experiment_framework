@@ -48,6 +48,7 @@ wandb:
   wandb_tags: []
 training:
   epochs: 10
+  is_sweep: false
   print_model: true
   fp16: false
   progress_show:
@@ -60,9 +61,9 @@ training:
     'transformer.decoder.layers.0',
     'transformer.decoder.layers.1'
   ]
-  resume_from: "./checkpoints/experiment-01_2025-04-11_21-31-48/epoch_4"
+#  resume_from: "./checkpoints/experiment-01_2025-04-11_21-31-48/epoch_4"
   valid_every_n_epochs: 1
   test_every_n_epochs: 1
   progress_every_n_epochs: 1
   progress_every_n_batches: 1
-  ds_config: './ds.json'
+#  ds_config: './ds.json'

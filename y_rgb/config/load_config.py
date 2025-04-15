@@ -2,13 +2,14 @@ import wandb
 from omegaconf import OmegaConf
 # from .runner_config import RunnerConfig
 
-def load_cfg(path, is_runtime = None, ds_cfg = None, from_cli = True):
+def load_cfg(path, is_sweep = False, ds_cfg = None, from_cli = True):
     base_cfg = OmegaConf.load(path)
     cli_cfg = OmegaConf.from_cli() if from_cli else {}
     ds_cfg = OmegaConf.load(ds_cfg) if ds_cfg else {}
 
+    is_sweep = is_sweep or base_cfg.training.is_sweep
     runtime_cfg = {}
-    if is_runtime:
+    if is_sweep:
         """
         for wandb sweep, this can experiment with different hyperparameters
         """
@@ -32,7 +33,7 @@ def load_cfg(path, is_runtime = None, ds_cfg = None, from_cli = True):
     if is_runtime, wandb will not init in the runner again, and as well, 
     the cfg should be updated to wandb.config
     """
-    if is_runtime:
+    if is_sweep:
         wandb.config.update(cfg)
     # return RunnerConfig(**cfg)
     # maybe not necessary

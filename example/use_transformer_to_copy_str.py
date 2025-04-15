@@ -162,6 +162,7 @@ if __name__ == '__main__':
     cfg_path = args.cfg
     cfg = load_cfg(cfg_path, from_cli = True)
 
+
     bench_dataset = CustomDataset(
         vocab_n = cfg.data.vocab_n,
         max_len = cfg.data.max_len,

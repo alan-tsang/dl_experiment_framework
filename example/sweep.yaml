@@ -1,0 +1,12 @@
+command:
+  - bash
+  - use_transformer_to_copy_str.sh
+method: grid
+metric:
+  name: loss
+  goal: minimize
+parameters:
+  model:
+    parameters:
+      num_layers:
+        values: [2, 4, 6]
