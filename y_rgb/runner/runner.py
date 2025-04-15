@@ -342,7 +342,7 @@ class Runner(RunnerBase):
             try:
                 import wandb
             except ImportError:
-                first_call_warning("wandb", "未安装wandb，无法使用wandb callback.")
+                warnings.warn("未安装wandb，请使用pip install wandb安装.")
             else:
                 if wandb.run is not None:
                     wandb.log(log_dict)
