@@ -6,7 +6,7 @@
 @Date: 2023/11/10 11:29
 ================
 """
-from zero2hero.common.logger import Logger
+from ..common.logger import Logger
 
 
 class BaseCallBack:

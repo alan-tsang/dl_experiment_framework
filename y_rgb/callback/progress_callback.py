@@ -1,7 +1,7 @@
 import math
 from datetime import datetime
 
-from zero2hero.common.logger import Logger
+from ..common.logger import Logger
 from .base_callback import BaseCallBack
 from ..common.registry import registry
 

@@ -517,7 +517,6 @@ class Runner(RunnerBase):
         self._register_callbacks(callbacks)
 
 
-    @staticmethod
     def _move_data_to_device(self, data, device):
         if isinstance(data, torch.Tensor):
             return data.to(device, non_blocking = True)
