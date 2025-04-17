@@ -476,10 +476,17 @@ class Runner(RunnerBase):
                     drop_last = data_loader.drop_last
                 )
 
+            from torch.utils.data import RandomSampler, SequentialSampler
+
+            if isinstance(self.train_data_loader.sampler, RandomSampler):
+                shuffle = True
+            elif isinstance(self.train_data_loader.sampler, SequentialSampler):
+                shuffle = False
             self.train_data_loader = wrap_dataloader(
                 self.train_data_loader,
-                shuffle = True
+                shuffle = shuffle
             )
+
             if self.valid_data_loader is not None:
                 self.valid_data_loader = wrap_dataloader(self.valid_data_loader)
             if self.test_data_loader is not None:
@@ -540,10 +547,12 @@ class Runner(RunnerBase):
         """
         maybe should be overridden
         """
-        return self._move_train_data_to_device(data)
+        return self._move_data_to_device(data, registry.get("device"))
 
     def _move_test_data_to_device(self, data):
         """
         maybe should be overridden
         """
-        return self._move_train_data_to_device(data)
+        return self._move_data_to_device(data, registry.get("device"))
+
+
