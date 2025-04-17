@@ -18,7 +18,12 @@ def wrap_forward(forward):
 
 def turn_on_activation_checkpointing(model: torch.nn.Module,
                                      modules: Union[List[str], str]):
-
+    """
+    Wrap the forward function of the specified modules with activation checkpointing.
+    :param model:
+    :param modules:
+    :return:
+    """
     if isinstance(modules, str):
         modules = [modules]
     for module_name in modules:
