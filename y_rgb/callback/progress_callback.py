@@ -20,7 +20,7 @@ class ProcessCallBack(BaseCallBack):
         self.every_n_epoch = None
         self.every_n_batches = None
         train_avg_meter = []
-        train_monitors = registry.get("cfg.training.progress_show")
+        train_monitors = registry.get("cfg.training.progress_show", {"loss": False})
         for key, value in train_monitors.items():
             train_avg_meter.append(
                 AverageMeter(monitor = key, greater_is_better = value)
@@ -31,8 +31,8 @@ class ProcessCallBack(BaseCallBack):
 
     def on_register(self):
         super().on_register()
-        self.every_n_batches = registry.get("cfg.training.progress_every_n_batches")
-        self.every_n_epoch = registry.get("cfg.training.progress_every_n_epochs")
+        self.every_n_batches = registry.get("cfg.training.progress_every_n_batches", 1)
+        self.every_n_epoch = registry.get("cfg.training.progress_every_n_epochs", 1)
         self.logger = Logger.get_instance("logger")
 
 

@@ -13,12 +13,12 @@ class WandbCallback(BaseCallBack):
         super().on_register()
         if registry.get("is_main_process") and registry.get("cfg.wandb.wandb_enable") and wandb.run is None:
             wandb.init(
-                project=registry.get("cfg.wandb.wandb_project_name"),
-                name=registry.get("cfg.run_name"),
-                notes = registry.get("cfg.run_description"),
-                mode="offline" if registry.get("cfg.wandb.wandb_offline") else "online",
+                project=registry.get("cfg.wandb.wandb_project_name", 'default'),
+                name=registry.get("cfg.run_name", 'default'),
+                notes = registry.get("cfg.run_description", "default description"),
+                mode="offline" if registry.get("cfg.wandb.wandb_offline", False) else "online",
                 config = dict(registry.get("cfg")),
-                dir = registry.get("cfg.wandb.wandb_dir"),
+                dir = registry.get("cfg.wandb.wandb_dir", './'),
                 save_code = True,
                 tags = registry.get("cfg.wandb.wandb_tags")
             )
