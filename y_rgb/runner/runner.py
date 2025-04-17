@@ -554,5 +554,3 @@ class Runner(RunnerBase):
         maybe should be overridden
         """
         return self._move_data_to_device(data, registry.get("device"))
-
-
