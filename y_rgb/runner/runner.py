@@ -134,7 +134,7 @@ class Runner(RunnerBase):
 
     def train(self):
         current_epoch = registry.get("current_epoch")
-        is_fp16 = registry.get("cfg.training.fp16", False)
+        is_fp16 = registry.get("cfg.training.fp16")
         scaler = GradScaler() if is_fp16 else None
 
         # with torch.profiler.profile(
@@ -194,7 +194,7 @@ class Runner(RunnerBase):
             self.model.step()
         else:
             accumulation_steps = registry.get("cfg.training.gradient_accumulation", 1)
-            max_norm = registry.get("cfg.training.grad_clip")
+            max_norm = registry.get("cfg.training.grad_clip", None)
 
             # 缩放损失以平均梯度
             loss = loss / accumulation_steps
@@ -245,7 +245,7 @@ class Runner(RunnerBase):
         current_epoch = registry.get("current_epoch")
         if current_epoch is None:
             should_valid = True
-        elif (current_epoch + 1) % registry.get("cfg.training.valid_every_n_epochs", 1) == 0:
+        elif (current_epoch + 1) % registry.get("cfg.training.valid_every_n_epochs") == 0:
             should_valid = True
         else:
             should_valid = False
@@ -288,7 +288,7 @@ class Runner(RunnerBase):
         current_epoch = registry.get("current_epoch")
         if current_epoch is None:
             should_test = True
-        elif (current_epoch + 1) % registry.get("cfg.training.test_every_n_epochs", 1) == 0:
+        elif (current_epoch + 1) % registry.get("cfg.training.test_every_n_epochs") == 0:
             should_test = True
         else:
             should_test = False
@@ -323,7 +323,7 @@ class Runner(RunnerBase):
         super().before_all()
         self.logger.info(registry.get("device"))
         self.logger.info(registry.get("start_msg"))
-        if registry.get("cfg.training.print_model", True):
+        if registry.get("cfg.training.print_model"):
             # support distributed print, means print only once in the main process
             print(registry.get("model_info"))
 
@@ -338,7 +338,7 @@ class Runner(RunnerBase):
 
     @main_process
     def wandb_log(self, log_dict):
-        if registry.get("cfg.wandb.wandb_enable", False):
+        if registry.get("cfg.wandb.wandb_enable"):
             try:
                 import wandb
             except ImportError:
@@ -359,11 +359,11 @@ class Runner(RunnerBase):
         # 没有的话就会用这些参数创建
         self.logger = Logger.get_instance(
             "logger",
-            # **dict(registry.get("cfg.log")),
-            log_level = registry.get("cfg.log.log_level", 'INFO'),
-            to_file = registry.get("cfg.log.to_file", True),
-            folder = registry.get("cfg.log.folder", './logs'),
-            run_name = registry.get("cfg.run_name", 'default')
+            **dict(registry.get("cfg.log")),
+            # log_level = registry.get("cfg.log.log_level"),
+            # to_file = registry.get("cfg.log.to_file"),
+            # folder = registry.get("cfg.log.folder"),
+            run_name = registry.get("cfg.run_name")
         )
 
 
@@ -476,17 +476,10 @@ class Runner(RunnerBase):
                     drop_last = data_loader.drop_last
                 )
 
-            from torch.utils.data import RandomSampler, SequentialSampler
-
-            if isinstance(self.train_data_loader.sampler, RandomSampler):
-                shuffle = True
-            elif isinstance(self.train_data_loader.sampler, SequentialSampler):
-                shuffle = False
             self.train_data_loader = wrap_dataloader(
                 self.train_data_loader,
-                shuffle = shuffle
+                shuffle = True
             )
-
             if self.valid_data_loader is not None:
                 self.valid_data_loader = wrap_dataloader(self.valid_data_loader)
             if self.test_data_loader is not None:
@@ -500,7 +493,7 @@ class Runner(RunnerBase):
             batchs = int(get_batch_n(self.train_data_loader)),
         )
         wandb_callback = None
-        if registry.get("cfg.wandb.wandb_enable", False):
+        if registry.get("cfg.wandb.wandb_enable"):
             try:
                 import wandb
             except ImportError:
@@ -511,7 +504,7 @@ class Runner(RunnerBase):
                 wandb_callback = WandbCallback()
 
         checkpoint_callback = CheckpointCallback(runner = self) \
-                                if registry.get("cfg.pt.pt_save", True) \
+                                if registry.get("cfg.pt.pt_save") \
                                    or self.resume_from else None
         self.checkpoint_callback = checkpoint_callback
 
@@ -554,5 +547,3 @@ class Runner(RunnerBase):
         maybe should be overridden
         """
         return self._move_data_to_device(data, registry.get("device"))
-
-
