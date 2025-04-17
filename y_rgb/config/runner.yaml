@@ -1,40 +1,25 @@
-# this must be provided and if not provided, it is experiment-01
-run_name: experiment-01
-##
-run_description: "this is a demo run"
-# here is my model and data
-# it depends on the project
-dataset:
-  - type:
+# 建议全部显式指明，这样实际配置能全部记录
+# this must be provided
+#run_name: 'default'
+#run_description: "default description"
 
-  - type:
-
+# here is data, model and metric, it depends on the project
+# y_rgb have no effect on these
+# ==============================
+your_dataset:
 
 model:
   type: NumericDecoder
-  num_layers: 6
-  d: 768
-  n: 12
-  max_len: 512
-  d_ff: 3072
-  dropout: 0.1
-  n_quantiles: 500
-  use_rope: true
-  use_embed: true
-  num_beams: 2
-
-
+  your_arg1: 1
+  your_arg2: 2
 metric:
-  - type:
+  # 自定义metric可以按照model保存在这
 
-  - type:
-
-
-# below list all the config of runner with the default value
-# you can change it if you want
-optimizer:
-  lr: 3e-4
-  weight_decay: 0.01
+# ==============================
+#optimizer:
+  # 使用的是AdamW
+#  lr: 3e-4
+#  weight_decay: 0.01
 scheduler:
   type: "LinearWarmupCosineLRScheduler"
   min_lr: 3e-5
@@ -42,43 +27,43 @@ scheduler:
   warmup_rate: 0.1
   warmup_start_lr: 1e-5
 training:
+  # 必须指定
   epochs: 10
-  batch_size: 96
-  gradient_accumulation: 2
-  # grad_clip: 1.0
-  print_model: true
-  fp16: false
-  progress_show:
-    loss: false
-    loss_lm: false
-    loss_reg: false
-    accuracy: true
+#  is_sweep: false
+#  ds_config: null
+#  gradient_accumulation: 1
+#  resume_from: null
+#  activation_checkpoint: null
+#  grad_clip: null
+#  fp16: false
 
-  #    MSE: false
-#    MAE: false
-#    R2: true
-  valid_every_n_epochs: 1
-  test_every_n_epochs: 1
-  progress_every_n_epochs: 1
-  progress_every_n_batches: 2
-  ds_config: null
+#  print_model: true
+  # false means loss is <not> [greater is better].
+#  progress_show:
+#    loss: false
+#  valid_every_n_epochs: 1
+#  test_every_n_epochs: 1
+#  progress_every_n_epochs: 1
+#  progress_every_n_batches: 1
 
-log:
-  log_level: "INFO"
-  to_file: true
-  folder: "./logs"
-
-pt:
-  pt_save: true
-  pt_save_dir: "./checkpoints"
-  pt_save_n_epochs: 1
-  pt_best_monitor:
-    loss: false
-  pt_topk: 3
-wandb:
-  wandb_enable: true
-  wandb_project_name: "N_transformer"
-  wandb_offline: true
-  wandb_dir: "./"
-  wandb_tags: []
-
+# below list all the config of runner with the default value
+# you can change it if you want
+#log:
+#  to_file: true
+#  folder: "./logs"
+#  log_level: "INFO"
+#pt:
+#  pt_save: true
+#  pt_save_dir: "./checkpoints"
+#  # 不互斥，若同时指定n_epochs, n_batches, 则都会生效
+#  pt_best_monitor:
+#    loss: false
+#  pt_topk: 3
+#  pt_save_n_epochs: 1
+#  pt_save_n_batches: null
+#wandb:
+#  wandb_enable: false
+#  wandb_project_name: "default"
+#  wandb_offline: false
+#  wandb_dir: "./"
+#  wandb_tags: null

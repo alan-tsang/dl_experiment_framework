@@ -62,19 +62,19 @@ class CheckpointCallback(BaseCallBack):
 
     def on_register(self):
         super().on_register()
-        self.topk = registry.get("cfg.pt.pt_topk")
+        self.topk = registry.get("cfg.pt.pt_topk", 3)
 
         self.folder = self._generate_run_folder(
-            base_folder = registry.get("cfg.pt.pt_save_dir"),
-            prefix = registry.get("cfg.run_name")
+            base_folder = registry.get("cfg.pt.pt_save_dir", './checkpoints'),
+            prefix = registry.get("cfg.run_name", 'default')
         )
         os.makedirs(self.folder, exist_ok=True)
 
         # 保存策略参数
-        self.every_n_epochs = registry.get("cfg.pt.pt_save_n_epochs")
+        self.every_n_epochs = registry.get("cfg.pt.pt_save_n_epochs", 1)
         self.every_n_batches = registry.get("cfg.pt.pt_save_n_batches")
 
-        monitor = list(registry.get("cfg.pt.pt_best_monitor").items())[0]
+        monitor = list(registry.get("cfg.pt.pt_best_monitor", {"loss": False}).items())[0]
         self.monitor = monitor[0]
         self._validate_init_params(self.topk, self.monitor)
 
