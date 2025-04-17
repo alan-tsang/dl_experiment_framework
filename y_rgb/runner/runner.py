@@ -45,7 +45,7 @@ class Runner(RunnerBase):
     ██║  ██║██║██║ ╚████║██║ ╚████║███████╗██║  ██║
     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
 
-    典型用法：
+    Example:
     custom your yaml config file based on the cfg in example,
     >>> runner = Runner(
             model=your_model,
