@@ -60,7 +60,7 @@ class BaseDataset(ABC):
         :return:
         """
         if isinstance(self.dataset, DatasetDict):
-            assert split is None, "split should be specified when dataset is a DatasetDict."
+            assert split is not None, "split should be specified when dataset is a DatasetDict."
             dataset = self.dataset[split]
         elif isinstance(self.dataset, (Dataset, IterableDataset)):
             dataset = self.dataset
