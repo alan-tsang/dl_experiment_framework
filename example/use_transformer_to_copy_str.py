@@ -157,7 +157,7 @@ class DumpRunResult(DumpResults):
 if __name__ == '__main__':
     import argparse
     arg = argparse.ArgumentParser()
-    arg.add_argument('--cfg', type=str, default='./default_cfg.yaml')
+    arg.add_argument('--cfg', type=str, default='./cfg.yaml')
     args, _ = arg.parse_known_args()
     cfg_path = args.cfg
     cfg = load_cfg(cfg_path)
