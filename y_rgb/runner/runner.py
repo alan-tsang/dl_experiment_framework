@@ -540,10 +540,10 @@ class Runner(RunnerBase):
         """
         maybe should be overridden
         """
-        return self._move_train_data_to_device(data)
+        return self._move_data_to_device(data, registry.get("device"))
 
     def _move_test_data_to_device(self, data):
         """
         maybe should be overridden
         """
-        return self._move_train_data_to_device(data)
+        return self._move_data_to_device(data, registry.get("device"))
