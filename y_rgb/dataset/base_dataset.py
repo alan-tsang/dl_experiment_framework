@@ -73,6 +73,7 @@ class BaseDataset(ABC):
     def _get_batch_loader(
             cls,
             dataset,
+            transform_fn: Optional[Callable] = None,
             batch_size: int = 1,
             pin_memory: bool = False,
             sampler = None,
@@ -81,9 +82,12 @@ class BaseDataset(ABC):
             shuffle: bool = False,
             **loader_kwargs
     ) -> DataLoader:
-        formatted_dataset = dataset.with_format("torch")
+        if transform_fn is not None:
+            dataset.set_transform(transform_fn)
+        else:
+            dataset = dataset.with_format("torch")
         return DataLoader(
-            formatted_dataset,
+            dataset,
             batch_size = batch_size,
             pin_memory = pin_memory,
             sampler = sampler,
